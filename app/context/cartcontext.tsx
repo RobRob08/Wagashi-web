@@ -54,8 +54,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const playNotificationSound = () => {
     try {
       // Use Web Audio API for instant sound with no delay
-      const audioContext = new (window.AudioContext ||
-        (window as any).webkitAudioContext)();
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as typeof window & { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      const audioContext = new AudioContextClass();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
 

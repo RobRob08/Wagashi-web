@@ -9,8 +9,6 @@ import {
   CreditCard,
   MapPin,
   User,
-  Phone,
-  Mail,
   CheckCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -161,9 +159,13 @@ export default function CheckoutForm() {
       setTimeout(() => {
         router.push("/checkout/success");
       }, 2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsProcessing(false);
-      setError(err.message || "Payment processing failed. Please try again.");
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Payment processing failed. Please try again.";
+      setError(errorMessage);
       console.error("Payment error:", err);
     }
   };

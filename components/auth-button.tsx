@@ -13,8 +13,15 @@ import {
   ShoppingBag,
 } from "lucide-react";
 
+interface User {
+  id: string;
+  email?: string;
+  created_at?: string;
+  user_metadata?: Record<string, string>;
+}
+
 export function AuthButton() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [userName, setUserName] = useState<string>("");
 
   useEffect(() => {
