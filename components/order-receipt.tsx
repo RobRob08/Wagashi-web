@@ -253,7 +253,7 @@ export default function OrderReceipt() {
       {/* Additional Info */}
       <div className="card bg-base-100 shadow-lg print:hidden">
         <div className="card-body">
-          <h3 className="font-semibold text-lg mb-3">What's Next?</h3>
+          <h3 className="font-semibold text-lg mb-3">What&apos;s Next?</h3>
           <ul className="space-y-2 text-sm">
             <li className="flex items-start gap-2">
               <span className="text-primary">✓</span>
@@ -273,7 +273,7 @@ export default function OrderReceipt() {
             <li className="flex items-start gap-2">
               <span className="text-primary">✓</span>
               <span>
-                You'll receive a tracking number once your order ships
+                You&apos;ll receive a tracking number once your order ships
               </span>
             </li>
             <li className="flex items-start gap-2">

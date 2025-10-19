@@ -25,7 +25,12 @@ interface UserData {
 }
 
 export default function UserProfile() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{
+    id: string;
+    email?: string;
+    created_at?: string;
+    user_metadata?: Record<string, string>;
+  } | null>(null);
   const [userData, setUserData] = useState<UserData>({
     email: "",
     full_name: "",
@@ -393,7 +398,7 @@ export default function UserProfile() {
                 const orders = localStorage.getItem("orderHistory");
                 if (!orders) return "0.00";
                 const total = JSON.parse(orders).reduce(
-                  (sum: number, order: any) => sum + order.total,
+                  (sum: number, order: { total: number }) => sum + order.total,
                   0
                 );
                 return total.toFixed(2);

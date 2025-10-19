@@ -2,7 +2,6 @@
 // Documentation: https://developers.paymongo.com/docs
 
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
-const PAYMONGO_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY;
 const PAYMONGO_API_URL = "https://api.paymongo.com/v1";
 
 // Encode secret key to base64 for authorization

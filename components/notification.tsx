@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, ShoppingBag, X } from "lucide-react";
+import Image from "next/image";
 
 export type NotificationType = {
   id: string;
@@ -78,11 +78,12 @@ export function Notification({
 
               {/* Product Image if available */}
               {notification.productImage && (
-                <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden bg-white dark:bg-gray-800">
-                  <img
+                <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden bg-white dark:bg-gray-800 relative">
+                  <Image
                     src={`/prod/${notification.productImage}`}
                     alt={notification.productName || "Product"}
-                    className="w-full h-full object-cover"
+                    fill
+                    className="object-cover"
                   />
                 </div>
               )}
