@@ -53,7 +53,7 @@ export function About() {
 
             <div className="space-y-6 text-muted-foreground leading-relaxed">
               <p>
-                For generations, our family has preserved the delicate art of wagashi making. 
+                Wagashi aims to provide quality snack and desserts.
                 Each confection is a meditation on nature, seasons, and the ephemeral beauty 
                 that defines Japanese aesthetics.
               </p>
@@ -70,12 +70,12 @@ export function About() {
             {/* Stats */}
             <div className="grid grid-cols-3 gap-8 pt-8 border-t border-border">
               <div>
-                <div className="text-3xl mb-2">12</div>
-                <div className="text-sm text-muted-foreground">Generations</div>
+                <div className="text-3xl mb-2">Quality</div>
+                <div className="text-sm text-muted-foreground">Ingredients</div>
               </div>
               <div>
-                <div className="text-3xl mb-2">1603</div>
-                <div className="text-sm text-muted-foreground">Since</div>
+                <div className="text-3xl mb-2">2024</div>
+                <div className="text-sm text-muted-foreground">Started in</div>
               </div>
               <div>
                 <div className="text-3xl mb-2">100%</div>
