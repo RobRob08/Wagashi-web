@@ -1,47 +1,132 @@
+"use client";
+
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { LogoutButton } from "./logout-button";
-import { User } from "lucide-react";
+import {
+  User,
+  ChevronDown,
+  UserCircle,
+  LogIn,
+  UserPlus,
+  ShoppingBag,
+} from "lucide-react";
 
-export async function AuthButton() {
-  const supabase = await createClient();
+export function AuthButton() {
+  const [user, setUser] = useState<any>(null);
+  const [userName, setUserName] = useState<string>("");
 
-  // Fetch full user instead of claims
-  const { data } = await supabase.auth.getUser();
-  const user = data?.user;
+  useEffect(() => {
+    const loadUser = async () => {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getUser();
+
+      if (data?.user) {
+        setUser(data.user);
+
+        // Try to get user's name from localStorage profile
+        const savedProfile = localStorage.getItem(`profile_${data.user.id}`);
+        if (savedProfile) {
+          const profile = JSON.parse(savedProfile);
+          setUserName(profile.full_name || data.user.email || "");
+        } else {
+          setUserName(
+            data.user.user_metadata?.full_name || data.user.email || ""
+          );
+        }
+      }
+    };
+
+    loadUser();
+  }, []);
 
   return user ? (
-    <div className="dropdown z-50 dropdown-center items-center gap-4">
-  <div tabIndex={0} role="button"><User/></div>
-  <ul tabIndex={0} className="dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm">
-    <li><span className="text-sm text-center">Hey, {user.email}</span></li>
-    <li><Link href={"/profile"} className="text-sm text-center">User Profile</Link> </li>
-    <li><LogoutButton/></li>
-  </ul>
-</div>
-    
+    <div className="dropdown dropdown-end">
+      <div
+        tabIndex={0}
+        role="button"
+        className="btn btn-ghost btn-circle hover:bg-base-200 transition-colors"
+      >
+        <User className="h-5 w-5" />
+      </div>
+      <div
+        tabIndex={0}
+        className="dropdown-content bg-base-100 rounded-box z-[100] w-64 shadow-xl border border-base-200 mt-3"
+      >
+        {/* User Info Header */}
+        <div className="px-4 py-3 border-b border-base-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+              <User className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-base-content/50 font-normal">Hey,</p>
+              <p className="font-semibold text-sm truncate">{userName}</p>
+              {userName !== user.email && (
+                <p className="text-xs text-base-content/40 truncate">
+                  {user.email}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Menu Items */}
+        <div className="p-2">
+          <Link
+            href="/profile"
+            className="flex items-center gap-3 px-4 py-3 hover:bg-base-200 transition-colors rounded-lg w-full"
+          >
+            <UserCircle className="h-5 w-5" />
+            <span>User Profile</span>
+          </Link>
+
+          <Link
+            href="/orders"
+            className="flex items-center gap-3 px-4 py-3 hover:bg-base-200 transition-colors rounded-lg w-full"
+          >
+            <ShoppingBag className="h-5 w-5" />
+            <span>My Orders</span>
+          </Link>
+
+          {/* Logout Button */}
+          <div className="mt-1 pt-2 border-t border-base-200">
+            <LogoutButton />
+          </div>
+        </div>
+      </div>
+    </div>
   ) : (
-    
-      <div className="dropdown dropdown-center gap-2 items-center">
-  <div tabIndex={0} role="button"><User/></div>
-  <ul tabIndex={0} className="dropdown-content menu bg-base-100 rounded-box z-1 w-32 p-2 shadow-sm">
-    <li>
-        <Link
-        href="/auth/login"
-        className=" flex items-center uppercaseflex items-center uppercase"
+    <div className="dropdown dropdown-end">
+      <div
+        tabIndex={0}
+        role="button"
+        className="btn btn-ghost gap-2 hover:bg-base-200 transition-colors"
       >
-        Login
-      </Link>
-      </li>
-      <li>
-        <Link
-        href="/auth/sign-up"
-        className=" flex items-center uppercaseflex items-center uppercase"
+        <User className="h-5 w-5" />
+        <span className="hidden sm:inline">Account</span>
+        <ChevronDown className="h-4 w-4" />
+      </div>
+      <div
+        tabIndex={0}
+        className="dropdown-content bg-base-100 rounded-box z-[100] w-52 p-2 shadow-xl border border-base-200 mt-3"
       >
-        sign up
-      </Link>
-      </li>
-  </ul>
-</div>
+        <Link
+          href="/auth/login"
+          className="flex items-center gap-3 px-4 py-3 hover:bg-base-200 transition-colors rounded-lg w-full"
+        >
+          <LogIn className="h-5 w-5" />
+          <span>Login</span>
+        </Link>
+        <Link
+          href="/auth/sign-up"
+          className="flex items-center gap-3 px-4 py-3 hover:bg-base-200 transition-colors rounded-lg w-full"
+        >
+          <UserPlus className="h-5 w-5" />
+          <span>Sign Up</span>
+        </Link>
+      </div>
+    </div>
   );
 }

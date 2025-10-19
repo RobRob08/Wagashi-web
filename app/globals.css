@@ -71,35 +71,118 @@
 
 /* ===== Custom Animations ===== */
 @keyframes fadeIn-jp {
-  0% { opacity: 0; transform: translateY(-12px); }
-  50% { opacity: 0; }
-  70% { opacity: 0; }
-  90% { opacity: 0.5; transform: translateY(-10px); }
-  100% { opacity: 1; transform: translateY(0px); }
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes fadeIn-eng {
-  0% { opacity: 0; transform: translateY(-15px); }
-  50% { opacity: 0.5; transform: translateY(-5px); }
-  100% { opacity: 1; transform: translateY(0px); }
+  0% {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes fadeIn-img {
-   0% { opacity: 0; transform: translateX(30px); }
-  50% { opacity: 0; }
-  70% { opacity: 0; }
-  90% { opacity: 0.5; transform: translateX(20px); }
-  100% { opacity: 1; transform: translateX(0px); }
+  0% {
+    opacity: 0;
+    transform: translateX(40px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.2);
+  }
 }
 
 .welcome-jp {
-  animation: fadeIn-jp 3s;
+  animation: fadeIn-jp 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.welcome-jp:hover {
+  animation: float 2s ease-in-out infinite;
 }
 
 .welcome-eng {
-  animation: fadeIn-eng 2s;
+  animation: fadeIn-eng 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.2s backwards;
+  transition: all 0.3s ease;
+}
+
+.welcome-eng:hover {
+  transform: scale(1.05);
+  color: hsl(var(--primary));
 }
 
 .welcome-img {
-  animation: fadeIn-img 3s;
+  animation: fadeIn-img 1.4s cubic-bezier(0.4, 0, 0.2, 1) 0.3s backwards;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.welcome-img:hover {
+  transform: scale(1.05) rotate(1deg);
+}
+
+.welcome-desc {
+  animation: fadeIn-eng 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.4s backwards;
+  transition: all 0.3s ease;
+}
+
+/* ===== Print Styles for Receipt ===== */
+@media print {
+  body {
+    background: white !important;
+  }
+
+  /* Hide navbar when printing */
+  nav {
+    display: none !important;
+  }
+
+  /* Ensure receipt fits on page */
+  .card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Remove page margins for cleaner print */
+  @page {
+    margin: 1cm;
+  }
 }

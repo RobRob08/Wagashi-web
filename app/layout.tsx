@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { CartProvider } from "./context/cartcontext";
 import "./globals.css";
 import { DaisyThemeSync } from "@/components/daisyui-sync";
+import { NotificationContainer } from "@/components/notification-container";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -41,7 +42,10 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <DaisyThemeSync />
-          <CartProvider>{children}</CartProvider>
+          <CartProvider>
+            <NotificationContainer />
+            {children}
+          </CartProvider>
         </ThemeProvider>
       </body>
     </html>
