@@ -55,7 +55,7 @@ export function Footer() {
             <div className="text-sm mb-6">Contact</div>
             <div className="space-y-3 text-sm text-muted-foreground">
               <div>Gion District</div>
-              <div>Kyoto, Japan 605-0073</div>
+              <div>Quezon City, Philippines</div>
               <div className="pt-2">info@wagashi.jp</div>
             </div>
           </div>
