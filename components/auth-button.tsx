@@ -65,7 +65,9 @@ export function AuthButton() {
         <div className="px-4 py-3 border-b border-base-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-              <User className="h-5 w-5 text-primary" />
+               <User className="h-5 w-5" />
+                <span className="hidden sm:inline">Account</span>
+                <ChevronDown className="h-4 w-4" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs text-base-content/50 font-normal">Hey,</p>
