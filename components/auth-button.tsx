@@ -56,6 +56,8 @@ export function AuthButton() {
         className="btn btn-ghost btn-circle hover:bg-base-200 transition-colors"
       >
         <User className="h-5 w-5" />
+        <span className="hidden sm:inline">Account</span>
+        <ChevronDown className="h-4 w-4" />
       </div>
       <div
         tabIndex={0}
