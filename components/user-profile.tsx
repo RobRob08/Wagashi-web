@@ -92,20 +92,38 @@ export default function UserProfile() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    setMessage({ type: "", text: "" });
+  setSaving(true);
+  setMessage({ type: "", text: "" });
 
-    try {
-      // Save to localStorage
-      if (user) {
-        const profileData = {
-          full_name: userData.full_name,
-          phone: userData.phone,
-          address: userData.address,
-          city: userData.city,
-          postal_code: userData.postal_code,
-        };
-        localStorage.setItem(`profile_${user.id}`, JSON.stringify(profileData));
+  try {
+    if (user) {
+      const supabase = createClient();
+
+      // Construct the data object with the user profile details
+      const profileData = {
+        email: userData.email, // This stays unchanged as it's linked to auth
+        full_name: userData.full_name,
+        phone: userData.phone,
+        address: userData.address,
+        city: userData.city,
+        postal_code: userData.postal_code,
+      };
+
+      // Update user profile in the 'user_profiles' table using the user.id (which is the primary key)
+      const { error } = await supabase
+        .from("user_profiles")
+        .upsert(
+          [
+            {
+              id: user.id,  // Use the user's id as the primary key
+              ...profileData,
+              updated_at: new Date().toISOString(),  // Manually update the 'updated_at' field
+            },
+          ],
+        );
+
+      if (error) {
+        throw error;
       }
 
       setMessage({ type: "success", text: "Profile updated successfully!" });
@@ -115,13 +133,15 @@ export default function UserProfile() {
       setTimeout(() => {
         setMessage({ type: "", text: "" });
       }, 3000);
-    } catch (error) {
-      console.error("Error saving profile:", error);
-      setMessage({ type: "error", text: "Failed to save profile" });
-    } finally {
-      setSaving(false);
     }
-  };
+  } catch (error) {
+    console.error("Error saving profile:", error);
+    setMessage({ type: "error", text: "Failed to save profile" });
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   const handleCancel = () => {
     setIsEditing(false);
