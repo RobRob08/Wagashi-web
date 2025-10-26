@@ -84,6 +84,7 @@ export default function CheckoutForm() {
           exp_year: parseInt(`20${expYear}`),
           cvc: formData.cardCVV,
           name: formData.cardName,
+          email: formData.email
         };
       }
 

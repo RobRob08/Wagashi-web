@@ -121,6 +121,7 @@ export async function createPaymentMethod(cardDetails: {
   exp_year: number;
   cvc: string;
   name: string;
+  email: string;
 }): Promise<{ data: { id: string } }> {
   const response = await fetch(`${PAYMONGO_API_URL}/payment_methods`, {
     method: "POST",
@@ -140,6 +141,7 @@ export async function createPaymentMethod(cardDetails: {
           },
           billing: {
             name: cardDetails.name,
+            email: cardDetails.email,
           },
         },
       },
