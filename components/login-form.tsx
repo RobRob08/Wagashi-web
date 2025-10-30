@@ -28,26 +28,45 @@ export function LoginForm({
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const supabase = createClient();
-    setIsLoading(true);
-    setError(null);
+const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+  const supabase = createClient();
+  setIsLoading(true);
+  setError(null);
 
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
-      // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push("/protected");
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
+  try {
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (authError) throw authError;
+
+    // Get the logged-in user's ID
+    const user = authData.user;
+    if (!user) throw new Error("No user found");
+
+    // Fetch the user's role from the public.user_profiles table
+    const { data: profile, error: profileError } = await supabase
+      .from("user_profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError) throw profileError;
+
+    // Redirect based on role
+    if (profile.role === "admin") {
+      router.push("/admin"); // admin dashboard
+    } else {
+      router.push("/protected"); // normal user area
     }
-  };
+  } catch (error: unknown) {
+    setError(error instanceof Error ? error.message : "An error occurred");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   
 
