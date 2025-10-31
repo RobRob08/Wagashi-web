@@ -78,11 +78,10 @@ export async function POST(request: NextRequest) {
       { error: "Invalid payment method" },
       { status: 400 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("PayMongo API Error:", error);
-    return NextResponse.json(
-      { error: error.message || "Payment processing failed" },
-      { status: 500 }
-    );
+    const errorMessage =
+      error instanceof Error ? error.message : "Payment processing failed";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
