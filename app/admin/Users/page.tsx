@@ -159,42 +159,30 @@ export default function AdminUsersPage() {
               <td>{user.full_name || "-"}</td>
               <td>{user.phone || "-"}</td>
               <td>
-                <div className="dropdown dropdown-bottom">
-                  <button className="btn btn-sm btn-primary m-1">
-                    {selectedUsers[user.id]?.role || user.role}
-                  </button>
-                  <ul className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
-                    {roles.map((r) => (
-                      <li key={r}>
-                        <a
-                          onClick={() => updateUser(user.id, "role", r)}
-                          className="cursor-pointer"
-                        >
-                          {r.charAt(0).toUpperCase() + r.slice(1)}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <select
+                  className="select select-bordered w-full"
+                  value={selectedUsers[user.id]?.role || user.role}
+                  onChange={(e) => updateUser(user.id, "role", e.target.value)}
+                >
+                  {roles.map((r) => (
+                    <option key={r} value={r}>
+                      {r.charAt(0).toUpperCase() + r.slice(1)}
+                    </option>
+                  ))}
+                </select>
               </td>
               <td>
-                <div className="dropdown dropdown-bottom">
-                  <button className="btn btn-sm btn-secondary m-1">
-                    {selectedUsers[user.id]?.status || user.status}
-                  </button>
-                  <ul className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
-                    {statuses.map((s) => (
-                      <li key={s}>
-                        <a
-                          onClick={() => updateUser(user.id, "status", s)}
-                          className="cursor-pointer"
-                        >
-                          {s.charAt(0).toUpperCase() + s.slice(1)}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <select
+                  className="select select-bordered w-full"
+                  value={selectedUsers[user.id]?.status || user.status}
+                  onChange={(e) => updateUser(user.id, "status", e.target.value)}
+                >
+                  {statuses.map((s) => (
+                    <option key={s} value={s}>
+                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                    </option>
+                  ))}
+                </select>
               </td>
               <td>{new Date(user.created_at).toLocaleString()}</td>
               <td>
