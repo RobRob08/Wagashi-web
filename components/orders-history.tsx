@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client"; 
 import { Yuji_Boku } from "next/font/google";
 import {
   ShoppingBag,
@@ -18,6 +19,9 @@ const yuji = Yuji_Boku({
   subsets: ["latin"],
 });
 
+// Initialize Supabase client
+const supabase = createClient();
+
 interface OrderItem {
   product_id: number;
   product_name: string;
@@ -28,6 +32,7 @@ interface OrderItem {
 }
 
 interface Order {
+  id: string;
   orderNumber: string;
   date: string;
   customerInfo: {
@@ -48,27 +53,66 @@ export default function OrdersHistory() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load orders from localStorage
-    const loadOrders = () => {
+    const fetchOrders = async () => {
       try {
-        const ordersData = localStorage.getItem("orderHistory");
-        if (ordersData) {
-          const parsedOrders = JSON.parse(ordersData);
-          // Sort by date (newest first)
-          const sortedOrders = parsedOrders.sort(
-            (a: Order, b: Order) =>
-              new Date(b.date).getTime() - new Date(a.date).getTime()
-          );
-          setOrders(sortedOrders);
-        }
+        // Fetch orders from Supabase
+        const { data: ordersData, error: ordersError } = await supabase
+          .from("orders")
+          .select("*")
+          .order("date", { ascending: false });
+
+        if (ordersError) throw ordersError;
+        if (!ordersData) return;
+
+        // Fetch order items for these orders
+        const orderIds = ordersData.map((o) => o.id);
+        const { data: itemsData, error: itemsError } = await supabase
+          .from("order_items")
+          .select("*")
+          .in("order_id", orderIds);
+
+        if (itemsError) throw itemsError;
+
+        // Map items to orders
+        const mappedOrders: Order[] = ordersData.map((order) => {
+          const orderItems = itemsData
+            ?.filter((item) => item.order_id === order.id)
+            .map((item) => ({
+              product_id: item.product_id,
+              product_name: item.product_name,
+              product_jp: item.product_jp,
+              product_price: parseFloat(item.product_price),
+              product_img: item.product_img,
+              quantity: item.quantity,
+            })) || [];
+
+          return {
+            id: order.id,
+            orderNumber: order.order_number,
+            date: new Date(order.date).toLocaleDateString(),
+            customerInfo: {
+              name: order.customer_name,
+              email: order.customer_email,
+              phone: order.customer_phone || "",
+              address: order.customer_address || "",
+            },
+            paymentMethod: order.payment_method,
+            items: orderItems,
+            subtotal: parseFloat(order.subtotal),
+            shipping: parseFloat(order.shipping),
+            total: parseFloat(order.total),
+          };
+        });
+
+        setOrders(mappedOrders);
       } catch (error) {
-        console.error("Error loading orders:", error);
+        console.error("Error fetching orders:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    loadOrders();
+    fetchOrders();
   }, []);
 
   if (loading) {

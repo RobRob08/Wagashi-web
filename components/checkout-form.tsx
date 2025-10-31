@@ -12,6 +12,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client"; 
 
 const yuji = Yuji_Boku({
   weight: "400",
@@ -23,6 +24,7 @@ export default function CheckoutForm() {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
+  const [error, setError] = useState("");
 
   // Form state
   const [formData, setFormData] = useState({
@@ -40,14 +42,12 @@ export default function CheckoutForm() {
     cardCVV: "",
   });
 
-  const [error, setError] = useState("");
-
-  // Calculate totals
+  // Totals
   const subtotal = cart.reduce(
     (sum, item) => sum + item.product_price * item.quantity,
     0
   );
-  const shipping = subtotal > 1000 ? 0 : 100; // Free shipping over ₱1000
+  const shipping = subtotal > 1000 ? 0 : 100;
   const total = subtotal + shipping;
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -60,6 +60,7 @@ export default function CheckoutForm() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // 🧾 Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -74,7 +75,7 @@ export default function CheckoutForm() {
     try {
       const orderDescription = `Order for ${formData.firstName} ${formData.lastName}`;
 
-      // Prepare card details if card payment
+      // Card details if needed
       let cardDetails = null;
       if (formData.paymentMethod === "card") {
         const [expMonth, expYear] = formData.cardExpiry.split("/");
@@ -84,40 +85,36 @@ export default function CheckoutForm() {
           exp_year: parseInt(`20${expYear}`),
           cvc: formData.cardCVV,
           name: formData.cardName,
-          email: formData.email
+          email: formData.email,
         };
       }
 
-      // Call PayMongo API
+      // PayMongo API
       const response = await fetch("/api/paymongo/create-payment", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: total,
           paymentMethod: formData.paymentMethod,
-          cardDetails: cardDetails,
+          cardDetails,
           description: orderDescription,
         }),
       });
 
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Payment failed");
 
-      if (!response.ok) {
-        throw new Error(data.error || "Payment failed");
-      }
+      // Supabase integration starts here
+      const supabase = createClient();
 
-      // Save order data for receipt (before any redirects)
+      // Get logged-in user (if any)
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       const orderData = {
         orderNumber: `WG${Date.now().toString().slice(-8)}`,
-        date: new Date().toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        date: new Date().toISOString(),
         customerInfo: {
           name: `${formData.firstName} ${formData.lastName}`,
           email: formData.email,
@@ -126,51 +123,85 @@ export default function CheckoutForm() {
         },
         paymentMethod: formData.paymentMethod,
         items: cart,
-        subtotal: subtotal,
-        shipping: shipping,
-        total: total,
+        subtotal,
+        shipping,
+        total,
       };
 
+      // Insert main order
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .insert([
+          {
+            user_id: user?.id || null,
+            order_number: orderData.orderNumber,
+            date: orderData.date,
+            customer_name: orderData.customerInfo.name,
+            customer_email: orderData.customerInfo.email,
+            customer_phone: orderData.customerInfo.phone,
+            customer_address: orderData.customerInfo.address,
+            payment_method: orderData.paymentMethod,
+            subtotal: orderData.subtotal,
+            shipping: orderData.shipping,
+            total: orderData.total,
+          },
+        ])
+        .select()
+        .single();
+
+      if (orderError) throw new Error("Failed to save order");
+
+      // Insert order items
+      const orderItems = cart.map((item) => ({
+        order_id: order.id,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        product_jp: item.product_jp,
+        product_price: item.product_price,
+        product_img: item.product_img,
+        quantity: item.quantity,
+      }));
+
+      const { error: itemsError } = await supabase
+        .from("order_items")
+        .insert(orderItems);
+
+      if (itemsError) throw new Error("Failed to save order items");
+
+      // Save for receipt
       localStorage.setItem("lastOrder", JSON.stringify(orderData));
 
-      // Save to order history
-      const existingOrders = localStorage.getItem("orderHistory");
-      const orderHistory = existingOrders ? JSON.parse(existingOrders) : [];
-      orderHistory.push(orderData);
-      localStorage.setItem("orderHistory", JSON.stringify(orderHistory));
-
-      // Handle different payment methods
+      // 🪙 Redirects for GCash / GrabPay
       if (
         formData.paymentMethod === "gcash" ||
         formData.paymentMethod === "grabpay"
       ) {
-        // Redirect to GCash/GrabPay checkout page
         if (data.checkoutUrl) {
           window.location.href = data.checkoutUrl;
           return;
         }
       }
 
-      // For card and cash on delivery, show success
+      // Success flow
       setIsProcessing(false);
       setOrderComplete(true);
       clearCart();
 
-      // Redirect to success page after 2 seconds
       setTimeout(() => {
         router.push("/checkout/success");
       }, 2000);
     } catch (err: unknown) {
       setIsProcessing(false);
-      const errorMessage =
+      const msg =
         err instanceof Error
           ? err.message
           : "Payment processing failed. Please try again.";
-      setError(errorMessage);
-      console.error("Payment error:", err);
+      setError(msg);
+      console.error("Checkout error:", err);
     }
   };
 
+  // Empty cart
   if (cart.length === 0 && !orderComplete) {
     return (
       <div className="text-center py-20">
@@ -189,6 +220,7 @@ export default function CheckoutForm() {
     );
   }
 
+  // Success screen
   if (orderComplete) {
     return (
       <div className="text-center py-20">
@@ -207,6 +239,7 @@ export default function CheckoutForm() {
     );
   }
 
+  // Checkout Form
   return (
     <div className="w-full">
       <h1 className="text-4xl font-bold mb-2">Checkout</h1>
@@ -214,9 +247,9 @@ export default function CheckoutForm() {
 
       <form onSubmit={handleSubmit}>
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left Column - Forms */}
+          {/* Left Column */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Customer Information */}
+            {/* Customer Info */}
             <div className="card bg-base-100 shadow-md">
               <div className="card-body">
                 <h2 className="card-title text-xl mb-4 flex items-center gap-2">
@@ -226,9 +259,7 @@ export default function CheckoutForm() {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="label">
-                      <span className="label-text font-medium">
-                        First Name *
-                      </span>
+                      <span className="label-text font-medium">First Name *</span>
                     </label>
                     <input
                       type="text"
@@ -241,9 +272,7 @@ export default function CheckoutForm() {
                   </div>
                   <div>
                     <label className="label">
-                      <span className="label-text font-medium">
-                        Last Name *
-                      </span>
+                      <span className="label-text font-medium">Last Name *</span>
                     </label>
                     <input
                       type="text"
@@ -284,7 +313,7 @@ export default function CheckoutForm() {
               </div>
             </div>
 
-            {/* Shipping Address */}
+            {/* Shipping */}
             <div className="card bg-base-100 shadow-md">
               <div className="card-body">
                 <h2 className="card-title text-xl mb-4 flex items-center gap-2">
@@ -292,56 +321,40 @@ export default function CheckoutForm() {
                   Shipping Address
                 </h2>
                 <div className="space-y-4">
-                  <div>
-                    <label className="label">
-                      <span className="label-text font-medium">
-                        Street Address *
-                      </span>
-                    </label>
-                    <textarea
-                      name="address"
-                      value={formData.address}
+                  <textarea
+                    name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    className="textarea textarea-bordered w-full"
+                    rows={3}
+                    required
+                    placeholder="Street Address"
+                  />
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      name="city"
+                      value={formData.city}
                       onChange={handleInputChange}
-                      className="textarea textarea-bordered w-full"
-                      rows={3}
+                      placeholder="City"
+                      className="input input-bordered w-full"
                       required
                     />
-                  </div>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">
-                        <span className="label-text font-medium">City *</span>
-                      </label>
-                      <input
-                        type="text"
-                        name="city"
-                        value={formData.city}
-                        onChange={handleInputChange}
-                        className="input input-bordered w-full"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="label">
-                        <span className="label-text font-medium">
-                          Postal Code *
-                        </span>
-                      </label>
-                      <input
-                        type="text"
-                        name="postalCode"
-                        value={formData.postalCode}
-                        onChange={handleInputChange}
-                        className="input input-bordered w-full"
-                        required
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      name="postalCode"
+                      value={formData.postalCode}
+                      onChange={handleInputChange}
+                      placeholder="Postal Code"
+                      className="input input-bordered w-full"
+                      required
+                    />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Payment Method */}
+            {/* Payment */}
             <div className="card bg-base-100 shadow-md">
               <div className="card-body">
                 <h2 className="card-title text-xl mb-4 flex items-center gap-2">
@@ -350,119 +363,73 @@ export default function CheckoutForm() {
                 </h2>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="flex items-center gap-2 cursor-pointer p-3 border rounded-lg hover:border-primary transition-colors">
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="cash"
-                        checked={formData.paymentMethod === "cash"}
-                        onChange={handleInputChange}
-                        className="radio radio-primary"
-                      />
-                      <span>Cash on Delivery</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer p-3 border rounded-lg hover:border-primary transition-colors">
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="card"
-                        checked={formData.paymentMethod === "card"}
-                        onChange={handleInputChange}
-                        className="radio radio-primary"
-                      />
-                      <span>Credit/Debit Card</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer p-3 border rounded-lg hover:border-primary transition-colors">
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="gcash"
-                        checked={formData.paymentMethod === "gcash"}
-                        onChange={handleInputChange}
-                        className="radio radio-primary"
-                      />
-                      <span>GCash</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer p-3 border rounded-lg hover:border-primary transition-colors">
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="grabpay"
-                        checked={formData.paymentMethod === "grabpay"}
-                        onChange={handleInputChange}
-                        className="radio radio-primary"
-                      />
-                      <span>GrabPay</span>
-                    </label>
+                    {["cash", "card", "gcash", "grabpay"].map((method) => (
+                      <label
+                        key={method}
+                        className="flex items-center gap-2 cursor-pointer p-3 border rounded-lg hover:border-primary transition-colors"
+                      >
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value={method}
+                          checked={formData.paymentMethod === method}
+                          onChange={handleInputChange}
+                          className="radio radio-primary"
+                        />
+                        <span className="capitalize">
+                          {method === "cash"
+                            ? "Cash on Delivery"
+                            : method === "gcash"
+                            ? "GCash"
+                            : method === "grabpay"
+                            ? "GrabPay"
+                            : "Credit/Debit Card"}
+                        </span>
+                      </label>
+                    ))}
                   </div>
 
+                  {/* Card Fields */}
                   {formData.paymentMethod === "card" && (
                     <div className="space-y-4 pt-4 border-t">
-                      <div>
-                        <label className="label">
-                          <span className="label-text font-medium">
-                            Card Number *
-                          </span>
-                        </label>
-                        <input
-                          type="text"
-                          name="cardNumber"
-                          value={formData.cardNumber}
-                          onChange={handleInputChange}
-                          placeholder="1234 5678 9012 3456"
-                          className="input input-bordered w-full"
-                          required={formData.paymentMethod === "card"}
-                        />
-                      </div>
-                      <div>
-                        <label className="label">
-                          <span className="label-text font-medium">
-                            Cardholder Name *
-                          </span>
-                        </label>
-                        <input
-                          type="text"
-                          name="cardName"
-                          value={formData.cardName}
-                          onChange={handleInputChange}
-                          className="input input-bordered w-full"
-                          required={formData.paymentMethod === "card"}
-                        />
-                      </div>
+                      <input
+                        type="text"
+                        name="cardNumber"
+                        placeholder="Card Number"
+                        value={formData.cardNumber}
+                        onChange={handleInputChange}
+                        className="input input-bordered w-full"
+                        required
+                      />
+                      <input
+                        type="text"
+                        name="cardName"
+                        placeholder="Cardholder Name"
+                        value={formData.cardName}
+                        onChange={handleInputChange}
+                        className="input input-bordered w-full"
+                        required
+                      />
                       <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="label">
-                            <span className="label-text font-medium">
-                              Expiry Date *
-                            </span>
-                          </label>
-                          <input
-                            type="text"
-                            name="cardExpiry"
-                            value={formData.cardExpiry}
-                            onChange={handleInputChange}
-                            placeholder="MM/YY"
-                            className="input input-bordered w-full"
-                            required={formData.paymentMethod === "card"}
-                          />
-                        </div>
-                        <div>
-                          <label className="label">
-                            <span className="label-text font-medium">
-                              CVV *
-                            </span>
-                          </label>
-                          <input
-                            type="text"
-                            name="cardCVV"
-                            value={formData.cardCVV}
-                            onChange={handleInputChange}
-                            placeholder="123"
-                            className="input input-bordered w-full"
-                            maxLength={4}
-                            required={formData.paymentMethod === "card"}
-                          />
-                        </div>
+                        <input
+                          type="text"
+                          name="cardExpiry"
+                          placeholder="MM/YY"
+                          value={formData.cardExpiry}
+                          onChange={handleInputChange}
+                          className="input input-bordered w-full"
+                          required
+                        />
+                        <input
+                          type="text"
+                          name="cardCVV"
+                          placeholder="CVV"
+                          value={formData.cardCVV}
+                          onChange={handleInputChange}
+                          className="input input-bordered w-full"
+                          maxLength={4}
+                          required
+                        />
                       </div>
                     </div>
                   )}
@@ -471,13 +438,12 @@ export default function CheckoutForm() {
             </div>
           </div>
 
-          {/* Right Column - Order Summary */}
+          {/* Order Summary */}
           <div className="lg:col-span-1">
             <div className="card bg-base-100 shadow-md sticky top-4">
               <div className="card-body">
                 <h2 className="card-title text-xl mb-4">Order Summary</h2>
 
-                {/* Cart Items */}
                 <div className="space-y-3 max-h-[300px] overflow-y-auto mb-4">
                   {cart.map((item) => (
                     <div
@@ -516,7 +482,6 @@ export default function CheckoutForm() {
                   ))}
                 </div>
 
-                {/* Totals */}
                 <div className="space-y-2 pt-4 border-t border-base-200">
                   <div className="flex justify-between text-sm">
                     <span className="text-base-content/60">
@@ -541,7 +506,6 @@ export default function CheckoutForm() {
                   </div>
                 </div>
 
-                {/* Error Message */}
                 {error && (
                   <div className="alert alert-error mt-4">
                     <svg
@@ -561,7 +525,6 @@ export default function CheckoutForm() {
                   </div>
                 )}
 
-                {/* Place Order Button */}
                 <button
                   type="submit"
                   className="btn btn-primary btn-lg w-full mt-6"

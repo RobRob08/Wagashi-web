@@ -20,16 +20,19 @@ export default function Cart() {
   const { cart, removeFromCart, updateQuantity, clearCart } = useCart();
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedItems, setSelectedItems] = useState<number[]>([]); // store selected product_ids
   const itemsPerPage = 5;
 
-  const total = cart.reduce(
-    (sum, item) => sum + item.product_price * item.quantity,
-    0
-  );
+  // Total for selected items
+  const total = cart
+    .filter((item) => selectedItems.includes(item.product_id))
+    .reduce((sum, item) => sum + item.product_price * item.quantity, 0);
 
-  const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalQuantity = cart
+    .filter((item) => selectedItems.includes(item.product_id))
+    .reduce((sum, item) => sum + item.quantity, 0);
 
-  // Calculate pagination
+  // Pagination
   const totalPages = Math.ceil(cart.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -40,7 +43,39 @@ export default function Cart() {
     if (currentPage > totalPages && totalPages > 0) {
       setCurrentPage(1);
     }
+    // Ensure removed items are deselected
+    setSelectedItems((prev) =>
+      prev.filter((id) => cart.some((item) => item.product_id === id))
+    );
   }, [cart.length, currentPage, totalPages]);
+
+  // Toggle selection for a single item
+  const toggleItem = (id: number) => {
+    setSelectedItems((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  // Select / deselect all items on current page
+  const toggleSelectAll = () => {
+    const allSelected = currentItems.every((item) =>
+      selectedItems.includes(item.product_id)
+    );
+    if (allSelected) {
+      // Deselect all on this page
+      setSelectedItems((prev) =>
+        prev.filter((id) => !currentItems.some((item) => item.product_id === id))
+      );
+    } else {
+      // Select all on this page
+      setSelectedItems((prev) => [
+        ...new Set([
+          ...prev,
+          ...currentItems.map((item) => item.product_id),
+        ]),
+      ]);
+    }
+  };
 
   return (
     <>
@@ -57,15 +92,16 @@ export default function Cart() {
         >
           <ShoppingBagIcon className="h-5 w-5" />
         </button>
-        {totalQuantity > 0 && (
+        {cart.length > 0 && (
           <span className="badge badge-sm indicator-item bg-transparent border-0 text-primary font-bold">
-            {totalQuantity}
+            {cart.length}
           </span>
         )}
       </div>
+
       <dialog id="my_modal_3" className="modal">
         <div className="modal-box w-full max-w-5xl flex flex-col p-0">
-          {/* Fixed Header */}
+          {/* Header */}
           <div className="px-6 py-4 border-b border-base-200 bg-base-100">
             <form method="dialog">
               <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">
@@ -88,6 +124,7 @@ export default function Cart() {
                   onClick={() => {
                     if (confirm("Are you sure you want to clear your cart?")) {
                       clearCart();
+                      setSelectedItems([]);
                     }
                   }}
                 >
@@ -96,7 +133,8 @@ export default function Cart() {
               )}
             </div>
           </div>
-          {/* Content Area - No scrolling */}
+
+          {/* Content */}
           <div className="flex-1 px-6 py-4">
             {cart.length === 0 ? (
               <div className="text-center py-12">
@@ -120,15 +158,38 @@ export default function Cart() {
               </div>
             ) : (
               <div>
-                {/* Products List - Paginated */}
+                {/* Select All Checkbox */}
+                <div className="flex items-center mb-3">
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-primary mr-2"
+                    checked={currentItems.every((item) =>
+                      selectedItems.includes(item.product_id)
+                    )}
+                    onChange={toggleSelectAll}
+                  />
+                  <span>Select All on this page</span>
+                </div>
+
+                {/* Product List */}
                 <div className="space-y-3 min-h-[400px]">
                   {currentItems.map((item) => (
                     <div
                       key={item.product_id}
-                      className="grid grid-cols-3 items-center gap-4 p-2 rounded-lg hover:bg-base-200/50 transition-colors"
+                      className="grid grid-cols-[auto_2fr_1fr] items-center gap-4 p-2 rounded-lg hover:bg-base-200/50 transition-colors"
                     >
-                      {/* Product Info - Takes 2 columns */}
-                      <div className="col-span-2 flex items-center gap-3">
+                      {/* Checkbox */}
+                      <div>
+                        <input
+                          type="checkbox"
+                          className="checkbox checkbox-primary"
+                          checked={selectedItems.includes(item.product_id)}
+                          onChange={() => toggleItem(item.product_id)}
+                        />
+                      </div>
+
+                      {/* Product Info */}
+                      <div className="flex items-center gap-3">
                         {item.product_img && (
                           <Image
                             src={`/prod/${item.product_img}`}
@@ -153,9 +214,8 @@ export default function Cart() {
                         </div>
                       </div>
 
-                      {/* Controls - Takes 1 column */}
+                      {/* Controls */}
                       <div className="flex items-center justify-end gap-3">
-                        {/* Quantity Controls - Horizontal: - | Number | + */}
                         <div className="join">
                           <button
                             className="btn btn-xs join-item hover:btn-primary"
@@ -177,8 +237,6 @@ export default function Cart() {
                             +
                           </button>
                         </div>
-
-                        {/* Delete Button */}
                         <button
                           className="btn btn-ghost btn-xs btn-square text-red-500 hover:bg-red-50 hover:text-red-600"
                           onClick={() => removeFromCart(item.product_id)}
@@ -190,7 +248,7 @@ export default function Cart() {
                   ))}
                 </div>
 
-                {/* Pagination Controls */}
+                {/* Pagination */}
                 {totalPages > 1 && (
                   <div className="flex flex-col items-center gap-3 mt-6 pt-4 border-t border-base-200">
                     <div className="flex justify-center items-center gap-2">
@@ -207,7 +265,6 @@ export default function Cart() {
                       <div className="flex gap-1">
                         {[...Array(totalPages)].map((_, index) => {
                           const pageNum = index + 1;
-                          // Show first, last, current, and adjacent pages
                           if (
                             pageNum === 1 ||
                             pageNum === totalPages ||
@@ -256,10 +313,9 @@ export default function Cart() {
                       </button>
                     </div>
 
-                    {/* Page Info */}
                     <div className="text-center text-sm text-base-content/60">
-                      Showing {startIndex + 1}-{Math.min(endIndex, cart.length)}{" "}
-                      of {cart.length} items
+                      Showing {startIndex + 1}-{Math.min(endIndex, cart.length)} of{" "}
+                      {cart.length} items
                     </div>
                   </div>
                 )}
@@ -267,7 +323,7 @@ export default function Cart() {
             )}
           </div>
 
-          {/* Fixed Footer - Only show when cart has items */}
+          {/* Footer */}
           {cart.length > 0 && (
             <div className="px-6 py-5 border-t-2 border-base-200 bg-base-100 shadow-lg">
               <div className="flex justify-between items-center mb-5 pb-4 border-b border-base-200">
@@ -282,9 +338,6 @@ export default function Cart() {
                 <div className="text-right text-sm text-base-content/60">
                   <div>
                     {totalQuantity} {totalQuantity === 1 ? "item" : "items"}
-                  </div>
-                  <div>
-                    {cart.length} {cart.length === 1 ? "product" : "products"}
                   </div>
                 </div>
               </div>
@@ -301,11 +354,14 @@ export default function Cart() {
                 </button>
                 <button
                   className="btn btn-primary btn-lg flex-1 shadow-lg hover:shadow-xl transition-shadow"
+                  disabled={selectedItems.length === 0}
                   onClick={() => {
                     (
                       document.getElementById("my_modal_3") as HTMLDialogElement
                     ).close();
-                    router.push("/checkout");
+                    router.push(
+                      `/checkout?items=${selectedItems.join(",")}`
+                    );
                   }}
                 >
                   Proceed to Checkout

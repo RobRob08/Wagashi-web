@@ -31,6 +31,7 @@ export default function UserProfile() {
     created_at?: string;
     user_metadata?: Record<string, string>;
   } | null>(null);
+
   const [userData, setUserData] = useState<UserData>({
     email: "",
     full_name: "",
@@ -39,14 +40,25 @@ export default function UserProfile() {
     city: "",
     postal_code: "",
   });
+
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
 
+  // Orders
+  const [orders, setOrders] = useState<{ total: number }[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+
   useEffect(() => {
     loadUserData();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      loadOrders();
+    }
+  }, [user]);
 
   const loadUserData = async () => {
     try {
@@ -58,7 +70,6 @@ export default function UserProfile() {
       if (user) {
         setUser(user);
 
-        // Try to load additional user data from localStorage or user metadata
         const savedProfile = localStorage.getItem(`profile_${user.id}`);
         if (savedProfile) {
           const profile = JSON.parse(savedProfile);
@@ -86,67 +97,85 @@ export default function UserProfile() {
     }
   };
 
+  const loadOrders = async () => {
+    if (!user) return;
+    setOrdersLoading(true);
+
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("orders")
+        .select("total")
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      setOrders(data || []);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setUserData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSave = async () => {
-  setSaving(true);
-  setMessage({ type: "", text: "" });
+    setSaving(true);
+    setMessage({ type: "", text: "" });
 
-  try {
-    if (user) {
-      const supabase = createClient();
+    try {
+      if (user) {
+        const supabase = createClient();
 
-      // Construct the data object with the user profile details
-      const profileData = {
-        email: userData.email, // This stays unchanged as it's linked to auth
-        full_name: userData.full_name,
-        phone: userData.phone,
-        address: userData.address,
-        city: userData.city,
-        postal_code: userData.postal_code,
-      };
+        const profileData = {
+          email: userData.email,
+          full_name: userData.full_name,
+          phone: userData.phone,
+          address: userData.address,
+          city: userData.city,
+          postal_code: userData.postal_code,
+        };
 
-      // Update user profile in the 'user_profiles' table using the user.id (which is the primary key)
-      const { error } = await supabase
-        .from("user_profiles")
-        .upsert(
-          [
+        const { error } = await supabase
+          .from("user_profiles")
+          .upsert([
             {
-              id: user.id,  // Use the user's id as the primary key
+              id: user.id,
               ...profileData,
-              updated_at: new Date().toISOString(),  // Manually update the 'updated_at' field
+              updated_at: new Date().toISOString(),
             },
-          ],
-        );
+          ]);
 
-      if (error) {
-        throw error;
+        if (error) {
+          throw error;
+        }
+
+        setMessage({ type: "success", text: "Profile updated successfully!" });
+        setIsEditing(false);
+
+        setTimeout(() => {
+          setMessage({ type: "", text: "" });
+        }, 3000);
       }
-
-      setMessage({ type: "success", text: "Profile updated successfully!" });
-      setIsEditing(false);
-
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setMessage({ type: "", text: "" });
-      }, 3000);
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      setMessage({ type: "error", text: "Failed to save profile" });
+    } finally {
+      setSaving(false);
     }
-  } catch (error) {
-    console.error("Error saving profile:", error);
-    setMessage({ type: "error", text: "Failed to save profile" });
-  } finally {
-    setSaving(false);
-  }
-};
-
+  };
 
   const handleCancel = () => {
     setIsEditing(false);
     loadUserData();
   };
+
+  const totalOrders = orders.length;
+  const totalSpent = orders.reduce((sum, order) => sum + Number(order.total), 0).toFixed(2);
 
   if (loading) {
     return (
@@ -401,10 +430,11 @@ export default function UserProfile() {
           <div className="card-body">
             <h3 className="text-sm text-base-content/60">Total Orders</h3>
             <p className="text-3xl font-bold">
-              {(() => {
-                const orders = localStorage.getItem("orderHistory");
-                return orders ? JSON.parse(orders).length : 0;
-              })()}
+              {ordersLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                totalOrders
+              )}
             </p>
           </div>
         </div>
@@ -414,15 +444,11 @@ export default function UserProfile() {
             <h3 className="text-sm text-base-content/60">Total Spent</h3>
             <p className="text-3xl font-bold">
               ₱
-              {(() => {
-                const orders = localStorage.getItem("orderHistory");
-                if (!orders) return "0.00";
-                const total = JSON.parse(orders).reduce(
-                  (sum: number, order: { total: number }) => sum + order.total,
-                  0
-                );
-                return total.toFixed(2);
-              })()}
+              {ordersLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                totalSpent
+              )}
             </p>
           </div>
         </div>
