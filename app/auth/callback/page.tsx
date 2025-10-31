@@ -10,28 +10,58 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handleAuth = async () => {
-      const { data, error } = await supabase.auth.getSession();
+      try {
 
-      if (error) {
-        console.error("Auth error:", error.message);
-        router.push("/login");
-        return;
-      }
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-      if (data?.session) {
-        console.log("✅ Logged in!", data.session);
-        router.push("/");
-      } else {
-        // If no session yet, let Supabase handle PKCE exchange
-        const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-
-        if (error) {
-          console.error("Auth error:", error.message);
-          router.push("/login");
+        if (sessionError) {
+          console.error("Auth error:", sessionError.message);
+          router.push("/auth/login");
           return;
         }
 
-        router.push("/");
+        let session = sessionData?.session;
+
+       
+        if (!session) {
+          const { data: exchangeData, error: exchangeError } =
+            await supabase.auth.exchangeCodeForSession(window.location.href);
+
+          if (exchangeError) {
+            console.error("Exchange error:", exchangeError.message);
+            router.push("/auth/login");
+            return;
+          }
+
+          session = exchangeData.session;
+        }
+
+       
+        if (session?.user) {
+          const { data: profile, error: profileError } = await supabase
+            .from("user_profiles")
+            .select("role")
+            .eq("id", session.user.id)
+            .single();
+
+          if (profileError) {
+            console.error("Error fetching profile:", profileError.message);
+            router.push("/protected");
+            return;
+          }
+
+          
+          if (profile?.role === "admin") {
+            router.push("/admin");
+          } else {
+            router.push("/");
+          }
+        } else {
+          router.push("/auth/login");
+        }
+      } catch (error) {
+        console.error("Unexpected error:", error);
+        router.push("/auth/login");
       }
     };
 
