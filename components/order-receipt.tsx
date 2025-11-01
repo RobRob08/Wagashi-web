@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Yuji_Boku } from "next/font/google";
@@ -50,7 +50,7 @@ interface OrderData {
   total: number;
 }
 
-export default function OrderReceipt() {
+function OrderReceiptContent() {
   const [orderData, setOrderData] = useState<OrderData | null>(null);
   const searchParams = useSearchParams();
   const orderNumber = searchParams.get("orderNumber");
@@ -282,5 +282,13 @@ export default function OrderReceipt() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OrderReceipt() {
+  return (
+    <Suspense fallback={<div>Loading receipt...</div>}>
+      <OrderReceiptContent />
+    </Suspense>
   );
 }
