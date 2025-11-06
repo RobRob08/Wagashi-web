@@ -60,7 +60,13 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">Admin Orders</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Admin Orders</h1>
+
+        <Link href="/admin" className="btn btn-outline">
+          ← Back
+        </Link>
+      </div>
       <table className="table w-full">
         <thead>
           <tr>
@@ -96,11 +102,12 @@ export default function AdminOrdersPage() {
               </td>
               <td>
                 <Link
-                  href={`/admin/orders/${order.id}`}
+                  href={`/admin/Orders/receipt?orderNumber=${order.order_number}`}
                   className="btn btn-sm btn-primary"
                 >
                   View
                 </Link>
+
               </td>
             </tr>
           ))}

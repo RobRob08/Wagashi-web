@@ -19,6 +19,7 @@ type Product = {
   product_category: string | null;
   product_subcategory: string | null;
   product_jp: string;
+  stock_level: number;
 };
 
 type SubCategory = {
@@ -83,18 +84,13 @@ export default function ProductCard() {
         .select("*", { count: "exact" })
         .range((page - 1) * pageSize, page * pageSize - 1);
 
-      if (search) {
-        query = query.ilike("product_name", `%${search}%`);
-      }
-      if (subcategory !== "all") {
-        query = query.eq("product_subcategory", subcategory);
-      }
+      if (search) query = query.ilike("product_name", `%${search}%`);
+      if (subcategory !== "all") query = query.eq("product_subcategory", subcategory);
 
       const { data, error, count } = await query;
 
-      if (error) {
-        console.error(error);
-      } else {
+      if (error) console.error(error);
+      else {
         setProducts((data as Product[]) ?? []);
         setTotalCount(count ?? 0);
       }
@@ -169,21 +165,38 @@ export default function ProductCard() {
                       {product.product_jp}
                     </p>
                   </h2>
+
                   <p className="text-sm text-muted-foreground line-clamp-3 flex-grow">
                     {product.product_desc}
                   </p>
+
                   <div className="flex justify-between items-center mt-4">
-                    <h1 className="text-2xl font-bold">
-                      ₱ {product.product_price}
-                    </h1>
+                    <div>
+                      <h1 className="text-2xl font-bold">
+                        ₱ {product.product_price}
+                      </h1>
+                      <p
+                        className={`text-sm font-medium mt-1 ${
+                          product.stock_level > 0 ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
+                        {product.stock_level > 0 ? "Available" : "Out of Stock"}
+                      </p>
+                    </div>
+
                     <motion.button
                       className={`btn ${
                         recentlyAdded.has(product.product_id)
                           ? "btn-success"
+                          : product.stock_level === 0
+                          ? "btn-disabled cursor-not-allowed"
                           : "btn-black"
                       } transition-colors`}
+                      disabled={product.stock_level === 0}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (product.stock_level === 0) return;
+
                         addToCart({
                           product_id: product.product_id,
                           product_name: product.product_name,
@@ -192,12 +205,10 @@ export default function ProductCard() {
                           product_jp: product.product_jp,
                         });
 
-                        // Add to recently added set
                         setRecentlyAdded((prev) =>
                           new Set(prev).add(product.product_id)
                         );
 
-                        // Remove after animation
                         setTimeout(() => {
                           setRecentlyAdded((prev) => {
                             const newSet = new Set(prev);
@@ -207,7 +218,7 @@ export default function ProductCard() {
                         }, 1000);
                       }}
                       whileTap={{ scale: 0.95 }}
-                      whileHover={{ scale: 1.05 }}
+                      whileHover={product.stock_level === 0 ? {} : { scale: 1.05 }}
                       transition={{
                         type: "spring",
                         stiffness: 400,
@@ -248,9 +259,7 @@ export default function ProductCard() {
                   <button
                     key={pageNum}
                     onClick={() => setPage(pageNum)}
-                    className={`btn ${
-                      page === pageNum ? "btn-primary" : "btn-outline"
-                    }`}
+                    className={`btn ${page === pageNum ? "btn-primary" : "btn-outline"}`}
                   >
                     {pageNum}
                   </button>

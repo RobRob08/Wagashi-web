@@ -26,34 +26,35 @@ type CartContextType = {
   notifications: NotificationType[];
   addNotification: (notification: Omit<NotificationType, "id">) => void;
   removeNotification: (id: string) => void;
+
+  selectedItems: number[];
+  setSelectedItems: (ids: number[]) => void;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [selectedItems, setSelectedItems] = useState<number[]>([]);
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
 
-  // Load from localStorage when component mounts
   useEffect(() => {
     const storedCart = localStorage.getItem("cart");
     if (storedCart) {
       try {
         setCart(JSON.parse(storedCart));
       } catch {
-        localStorage.removeItem("cart"); // reset if corrupted
+        localStorage.removeItem("cart");
       }
     }
   }, []);
 
-  // Save cart to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem("cart", JSON.stringify(cart));
   }, [cart]);
 
   const playNotificationSound = () => {
     try {
-      // Use Web Audio API for instant sound with no delay
       const AudioContextClass =
         window.AudioContext ||
         (window as typeof window & { webkitAudioContext: typeof AudioContext })
@@ -65,24 +66,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
 
-      // Create a pleasant two-tone chime (success sound)
-      oscillator.type = "sine"; // Sine wave for smooth tone
-      oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5 note
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
       oscillator.frequency.exponentialRampToValueAtTime(
         1320,
         audioContext.currentTime + 0.1
-      ); // E6 note (pleasant interval)
+      );
 
-      // Volume envelope for smooth sound
       gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-      gainNode.gain.linearRampToValueAtTime(
-        0.3,
-        audioContext.currentTime + 0.01
-      ); // Quick attack
+      gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
       gainNode.gain.exponentialRampToValueAtTime(
         0.01,
         audioContext.currentTime + 0.4
-      ); // Smooth decay
+      );
 
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.4);
@@ -92,14 +88,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const addNotification = (notification: Omit<NotificationType, "id">) => {
-    // Use a more unique ID to handle rapid additions
     const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     setNotifications((prev) => [...prev, { ...notification, id }]);
-
-    // Auto-remove notification after 4 seconds
-    setTimeout(() => {
-      removeNotification(id);
-    }, 4000);
+    setTimeout(() => removeNotification(id), 4000);
   };
 
   const removeNotification = (id: string) => {
@@ -119,7 +110,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return [...prev, { ...item, quantity: 1 }];
     });
 
-    // Always play sound and show notification when addToCart is called
     playNotificationSound();
     addNotification({
       type: "success",
@@ -131,6 +121,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const removeFromCart = (id: number) => {
     setCart((prev) => prev.filter((p) => p.product_id !== id));
+    setSelectedItems((prev) => prev.filter((i) => i !== id));
   };
 
   const updateQuantity = (id: number, quantity: number) => {
@@ -143,7 +134,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => {
+    setCart([]);
+    setSelectedItems([]);
+  };
 
   return (
     <CartContext.Provider
@@ -156,6 +150,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         notifications,
         addNotification,
         removeNotification,
+        selectedItems,
+        setSelectedItems,
       }}
     >
       {children}

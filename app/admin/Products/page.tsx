@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 
 // --- Types for database ---
 type Product = {
@@ -98,8 +99,13 @@ export default function ProductManagementPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">Product Management</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Product Management</h1>
 
+        <Link href="/admin" className="btn btn-outline">
+          ← Back
+        </Link>
+      </div>
       {/* Add Product Button */}
       <div className="mb-4">
         <button
@@ -115,7 +121,7 @@ export default function ProductManagementPage() {
         <table className="table-auto w-full mb-6 text-center">
           <thead>
             <tr>
-              <th className="px-2 py-1">Image</th> {/* Image column first */}
+              <th className="px-2 py-1">Image</th>
               <th className="px-2 py-1">Product Name</th>
               <th className="px-2 py-1">Price</th>
               <th className="px-2 py-1">Actions</th>

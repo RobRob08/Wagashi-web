@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 
 const supabase = createClient();
 
@@ -139,7 +140,13 @@ export default function AdminUsersPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">User Management</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">User Management</h1>
+
+        <Link href="/admin" className="btn btn-outline">
+          ← Back
+        </Link>
+      </div>
       <table className="table w-full">
         <thead>
           <tr>

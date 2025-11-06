@@ -71,15 +71,19 @@ export default function Navbar() {
     <nav className="sticky top-0 w-full backdrop-blur-md bg-base-100/70 border-b border-white/10 z-[1000]">
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
         <div className="flex items-center justify-between h-20">
-          {/* Logo */}
-          <Link href={"/"} className="flex items-center gap-3">
-            <Image
-              src="/image/logo.png"
-              width={60}
-              height={60}
-              alt="Wagashi Logo"
-            />
-          </Link>
+          {/* Logo or placeholder for spacing */}
+          <div className="flex items-center gap-3 w-[60px]">
+            {role !== "admin" && (
+              <Link href={"/"}>
+                <Image
+                  src="/image/logo.png"
+                  width={60}
+                  height={60}
+                  alt="Wagashi Logo"
+                />
+              </Link>
+            )}
+          </div>
 
           {/* Navigation Links */}
           <div className="hidden md:flex items-center gap-12">

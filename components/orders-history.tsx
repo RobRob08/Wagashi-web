@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client"; 
+import { createClient } from "@/lib/supabase/client";
 import { Yuji_Boku } from "next/font/google";
 import {
   ShoppingBag,
@@ -14,12 +14,7 @@ import {
   Receipt,
 } from "lucide-react";
 
-const yuji = Yuji_Boku({
-  weight: "400",
-  subsets: ["latin"],
-});
-
-// Initialize Supabase client
+const yuji = Yuji_Boku({ weight: "400", subsets: ["latin"] });
 const supabase = createClient();
 
 interface OrderItem {
@@ -46,6 +41,7 @@ interface Order {
   subtotal: number;
   shipping: number;
   total: number;
+  status: string; // Added status
 }
 
 export default function OrdersHistory() {
@@ -55,16 +51,30 @@ export default function OrdersHistory() {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        // Fetch orders from Supabase
+        // Get logged-in user
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          console.error("User not logged in");
+          setLoading(false);
+          return;
+        }
+
+        // Fetch orders linked to user
         const { data: ordersData, error: ordersError } = await supabase
           .from("orders")
           .select("*")
+          .eq("user_id", user.id)
           .order("date", { ascending: false });
 
         if (ordersError) throw ordersError;
-        if (!ordersData) return;
+        if (!ordersData || ordersData.length === 0) {
+          setOrders([]);
+          setLoading(false);
+          return;
+        }
 
-        // Fetch order items for these orders
+        // Fetch order items
         const orderIds = ordersData.map((o) => o.id);
         const { data: itemsData, error: itemsError } = await supabase
           .from("order_items")
@@ -73,18 +83,19 @@ export default function OrdersHistory() {
 
         if (itemsError) throw itemsError;
 
-        // Map items to orders
+        // Map items to each order
         const mappedOrders: Order[] = ordersData.map((order) => {
-          const orderItems = itemsData
-            ?.filter((item) => item.order_id === order.id)
-            .map((item) => ({
-              product_id: item.product_id,
-              product_name: item.product_name,
-              product_jp: item.product_jp,
-              product_price: parseFloat(item.product_price),
-              product_img: item.product_img,
-              quantity: item.quantity,
-            })) || [];
+          const orderItems =
+            itemsData
+              ?.filter((item) => item.order_id === order.id)
+              .map((item) => ({
+                product_id: item.product_id,
+                product_name: item.product_name,
+                product_jp: item.product_jp,
+                product_price: parseFloat(item.product_price),
+                product_img: item.product_img,
+                quantity: item.quantity,
+              })) || [];
 
           return {
             id: order.id,
@@ -101,6 +112,7 @@ export default function OrdersHistory() {
             subtotal: parseFloat(order.subtotal),
             shipping: parseFloat(order.shipping),
             total: parseFloat(order.total),
+            status: order.status, // include status
           };
         });
 
@@ -115,6 +127,7 @@ export default function OrdersHistory() {
     fetchOrders();
   }, []);
 
+  // Loading State
   if (loading) {
     return (
       <div className="text-center py-20">
@@ -124,6 +137,7 @@ export default function OrdersHistory() {
     );
   }
 
+  // Empty State
   if (orders.length === 0) {
     return (
       <div className="text-center py-20">
@@ -139,9 +153,9 @@ export default function OrdersHistory() {
     );
   }
 
+  // Orders List
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-2">Order History</h1>
         <p className="text-base-content/60">
@@ -149,7 +163,6 @@ export default function OrdersHistory() {
         </p>
       </div>
 
-      {/* Orders List */}
       <div className="space-y-6">
         {orders.map((order) => (
           <div
@@ -157,7 +170,7 @@ export default function OrdersHistory() {
             className="card bg-base-100 shadow-lg border border-base-200 hover:shadow-xl transition-shadow"
           >
             <div className="card-body">
-              {/* Order Header */}
+              {/* Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-base-200">
                 <div className="flex items-center gap-4">
                   <div className="bg-primary/10 p-3 rounded-lg">
@@ -174,10 +187,31 @@ export default function OrdersHistory() {
                   </div>
                 </div>
 
+                {/* Total, Payment Method & Status */}
                 <div className="flex flex-col items-start md:items-end gap-2">
                   <div className="badge badge-primary badge-lg">
                     ₱{order.total.toFixed(2)}
                   </div>
+
+                  {/* Status Badge */}
+                  <div
+                    className={`badge text-xs ${
+                      order.status === "pending"
+                        ? "badge-warning"
+                        : order.status === "processing"
+                        ? "badge-info"
+                        : order.status === "shipped"
+                        ? "badge-accent"
+                        : order.status === "delivered"
+                        ? "badge-success"
+                        : order.status === "cancelled"
+                        ? "badge-error"
+                        : "badge-ghost"
+                    }`}
+                  >
+                    {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                  </div>
+
                   <div className="flex items-center gap-2 text-sm">
                     <CreditCard className="h-4 w-4" />
                     <span className="capitalize">{order.paymentMethod}</span>
@@ -185,7 +219,7 @@ export default function OrdersHistory() {
                 </div>
               </div>
 
-              {/* Order Items */}
+              {/* Items */}
               <div className="py-4">
                 <h4 className="font-semibold mb-3">Items Ordered</h4>
                 <div className="space-y-3">
@@ -230,13 +264,13 @@ export default function OrdersHistory() {
                 </div>
               </div>
 
-              {/* Order Summary */}
+              {/* Summary */}
               <div className="pt-4 border-t border-base-200">
-                <div className="flex justify-between items-center text-sm mb-2">
+                <div className="flex justify-between text-sm mb-2">
                   <span className="text-base-content/60">Subtotal:</span>
                   <span>₱{order.subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between items-center text-sm mb-2">
+                <div className="flex justify-between text-sm mb-2">
                   <span className="text-base-content/60">Shipping:</span>
                   <span>
                     {order.shipping === 0
@@ -244,7 +278,7 @@ export default function OrdersHistory() {
                       : `₱${order.shipping.toFixed(2)}`}
                   </span>
                 </div>
-                <div className="flex justify-between items-center font-bold text-lg pt-2 border-t border-base-200">
+                <div className="flex justify-between font-bold text-lg pt-2 border-t border-base-200">
                   <span>Total:</span>
                   <span className="text-primary">
                     ₱{order.total.toFixed(2)}
@@ -252,20 +286,20 @@ export default function OrdersHistory() {
                 </div>
               </div>
 
-              {/* View Receipt Button */}
+              {/* Receipt Button */}
               <div className="pt-4 border-t border-base-200 mt-2">
                 <button
-                  onClick={() => {
-                    // Save this order as the last order and navigate to receipt
-                    localStorage.setItem("lastOrder", JSON.stringify(order));
-                    window.location.href = "/checkout/success";
-                  }}
-                  className="btn btn-outline btn-sm gap-2"
-                >
-                  <Receipt className="h-4 w-4" />
-                  View Receipt
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+                onClick={() => {
+
+                  window.location.href = `/receipt?orderNumber=${order.orderNumber}`;
+                }}
+                className="btn btn-outline btn-sm gap-2"
+              >
+                <Receipt className="h-4 w-4" />
+                View Receipt
+                <ChevronRight className="h-4 w-4" />
+              </button>
+
               </div>
             </div>
           </div>

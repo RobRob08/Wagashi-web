@@ -20,16 +20,16 @@ export default function Cart() {
   const { cart, removeFromCart, updateQuantity, clearCart } = useCart();
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedItems, setSelectedItems] = useState<number[]>([]); // store selected product_ids
+  const [selectedItems, setSelectedItems] = useState<number[]>([]);
   const itemsPerPage = 5;
 
   // Total for selected items
   const total = cart
-    .filter((item) => selectedItems.includes(item.product_id))
+    .filter((item) => selectedItems.includes(Number(item.product_id)))
     .reduce((sum, item) => sum + item.product_price * item.quantity, 0);
 
   const totalQuantity = cart
-    .filter((item) => selectedItems.includes(item.product_id))
+    .filter((item) => selectedItems.includes(Number(item.product_id)))
     .reduce((sum, item) => sum + item.quantity, 0);
 
   // Pagination
@@ -38,43 +38,56 @@ export default function Cart() {
   const endIndex = startIndex + itemsPerPage;
   const currentItems = cart.slice(startIndex, endIndex);
 
-  // Reset to page 1 when cart changes significantly
+  // Reset page or deselect removed items
   useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(1);
-    }
-    // Ensure removed items are deselected
+    if (currentPage > totalPages && totalPages > 0) setCurrentPage(1);
     setSelectedItems((prev) =>
-      prev.filter((id) => cart.some((item) => item.product_id === id))
+      prev.filter((id) => cart.some((item) => Number(item.product_id) === id))
     );
   }, [cart.length, currentPage, totalPages]);
 
   // Toggle selection for a single item
-  const toggleItem = (id: number) => {
+  const toggleItem = (id: number | string) => {
+    const numId = Number(id);
     setSelectedItems((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+      prev.includes(numId) ? prev.filter((item) => item !== numId) : [...prev, numId]
     );
   };
 
   // Select / deselect all items on current page
   const toggleSelectAll = () => {
     const allSelected = currentItems.every((item) =>
-      selectedItems.includes(item.product_id)
+      selectedItems.includes(Number(item.product_id))
     );
     if (allSelected) {
-      // Deselect all on this page
       setSelectedItems((prev) =>
-        prev.filter((id) => !currentItems.some((item) => item.product_id === id))
+        prev.filter((id) => !currentItems.some((item) => Number(item.product_id) === id))
       );
     } else {
-      // Select all on this page
       setSelectedItems((prev) => [
-        ...new Set([
-          ...prev,
-          ...currentItems.map((item) => item.product_id),
-        ]),
+        ...new Set([...prev, ...currentItems.map((item) => Number(item.product_id))]),
       ]);
     }
+  };
+
+  // Handle checkout
+  const handleCheckout = () => {
+    if (selectedItems.length === 0) return;
+
+    // Save only selected items to localStorage
+    const selectedCartItems = cart.filter(item =>
+      selectedItems.includes(Number(item.product_id))
+    );
+    localStorage.setItem("checkout_items", JSON.stringify(selectedCartItems));
+
+    // Close the modal first
+    (document.getElementById("my_modal_3") as HTMLDialogElement)?.close();
+    
+    // Clear selected items
+    setSelectedItems([]);
+    
+    // Then navigate to checkout page
+    router.push("/checkout");
   };
 
   return (
@@ -83,10 +96,8 @@ export default function Cart() {
         <button
           className="btn btn-ghost btn-circle btn-sm"
           onClick={() => {
-            setCurrentPage(1); // Reset to first page when opening
-            (
-              document.getElementById("my_modal_3") as HTMLDialogElement
-            )?.showModal();
+            setCurrentPage(1);
+            (document.getElementById("my_modal_3") as HTMLDialogElement)?.showModal();
           }}
           aria-label="Shopping cart"
         >
@@ -104,7 +115,10 @@ export default function Cart() {
           {/* Header */}
           <div className="px-6 py-4 border-b border-base-200 bg-base-100">
             <form method="dialog">
-              <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">
+              <button 
+                className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                onClick={() => setSelectedItems([])} // Clear selection when closing
+              >
                 ✕
               </button>
             </form>
@@ -148,9 +162,8 @@ export default function Cart() {
                 <button
                   className="btn btn-primary"
                   onClick={() => {
-                    (
-                      document.getElementById("my_modal_3") as HTMLDialogElement
-                    ).close();
+                    (document.getElementById("my_modal_3") as HTMLDialogElement).close();
+                    setSelectedItems([]);
                   }}
                 >
                   Continue Shopping
@@ -164,7 +177,7 @@ export default function Cart() {
                     type="checkbox"
                     className="checkbox checkbox-primary mr-2"
                     checked={currentItems.every((item) =>
-                      selectedItems.includes(item.product_id)
+                      selectedItems.includes(Number(item.product_id))
                     )}
                     onChange={toggleSelectAll}
                   />
@@ -183,7 +196,7 @@ export default function Cart() {
                         <input
                           type="checkbox"
                           className="checkbox checkbox-primary"
-                          checked={selectedItems.includes(item.product_id)}
+                          checked={selectedItems.includes(Number(item.product_id))}
                           onChange={() => toggleItem(item.product_id)}
                         />
                       </div>
@@ -202,15 +215,11 @@ export default function Cart() {
                         <div className="flex-1">
                           <h2 className="text-lg font-medium">
                             {item.product_name}
-                            <span
-                              className={`${yuji.className} block text-sm opacity-70`}
-                            >
+                            <span className={`${yuji.className} block text-sm opacity-70`}>
                               {item.product_jp}
                             </span>
                           </h2>
-                          <p className="text-xl font-bold mt-1">
-                            ₱{item.product_price}
-                          </p>
+                          <p className="text-xl font-bold mt-1">₱{item.product_price}</p>
                         </div>
                       </div>
 
@@ -220,7 +229,7 @@ export default function Cart() {
                           <button
                             className="btn btn-xs join-item hover:btn-primary"
                             onClick={() =>
-                              updateQuantity(item.product_id, item.quantity - 1)
+                              updateQuantity(Number(item.product_id), item.quantity - 1)
                             }
                           >
                             -
@@ -231,7 +240,7 @@ export default function Cart() {
                           <button
                             className="btn btn-xs join-item hover:btn-primary"
                             onClick={() =>
-                              updateQuantity(item.product_id, item.quantity + 1)
+                              updateQuantity(Number(item.product_id), item.quantity + 1)
                             }
                           >
                             +
@@ -239,7 +248,7 @@ export default function Cart() {
                         </div>
                         <button
                           className="btn btn-ghost btn-xs btn-square text-red-500 hover:bg-red-50 hover:text-red-600"
-                          onClick={() => removeFromCart(item.product_id)}
+                          onClick={() => removeFromCart(Number(item.product_id))}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -303,9 +312,7 @@ export default function Cart() {
                       <button
                         className="btn btn-sm btn-circle hover:btn-primary"
                         onClick={() =>
-                          setCurrentPage((prev) =>
-                            Math.min(totalPages, prev + 1)
-                          )
+                          setCurrentPage((prev) => Math.min(totalPages, prev + 1))
                         }
                         disabled={currentPage === totalPages}
                       >
@@ -328,45 +335,25 @@ export default function Cart() {
             <div className="px-6 py-5 border-t-2 border-base-200 bg-base-100 shadow-lg">
               <div className="flex justify-between items-center mb-5 pb-4 border-b border-base-200">
                 <div>
-                  <span className="text-sm text-base-content/60 block">
-                    Order Total
-                  </span>
-                  <span className="text-3xl font-bold text-primary">
-                    ₱{total.toFixed(2)}
-                  </span>
+                  <p className="font-bold text-lg">Total Quantity</p>
+                  <p className="text-sm text-base-content/60">
+                    {totalQuantity} item{totalQuantity !== 1 && "s"}
+                  </p>
                 </div>
-                <div className="text-right text-sm text-base-content/60">
-                  <div>
-                    {totalQuantity} {totalQuantity === 1 ? "item" : "items"}
-                  </div>
+                <div>
+                  <p className="font-bold text-lg">Total Price</p>
+                  <p className="text-xl font-bold">₱{total}</p>
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button
-                  className="btn btn-outline btn-lg flex-1 hover:btn-primary"
-                  onClick={() => {
-                    (
-                      document.getElementById("my_modal_3") as HTMLDialogElement
-                    ).close();
-                  }}
-                >
-                  Continue Shopping
-                </button>
-                <button
-                  className="btn btn-primary btn-lg flex-1 shadow-lg hover:shadow-xl transition-shadow"
-                  disabled={selectedItems.length === 0}
-                  onClick={() => {
-                    (
-                      document.getElementById("my_modal_3") as HTMLDialogElement
-                    ).close();
-                    router.push(
-                      `/checkout?items=${selectedItems.join(",")}`
-                    );
-                  }}
-                >
-                  Proceed to Checkout
-                </button>
-              </div>
+
+              {/* Checkout Button */}
+              <button
+                className="btn btn-primary w-full"
+                disabled={selectedItems.length === 0}
+                onClick={handleCheckout}
+              >
+                Checkout Selected Items ({selectedItems.length})
+              </button>
             </div>
           )}
         </div>

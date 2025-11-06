@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useCart } from "@/app/context/cartcontext";
 import Image from "next/image";
 import { Yuji_Boku } from "next/font/google";
@@ -19,12 +19,40 @@ const yuji = Yuji_Boku({
   subsets: ["latin"],
 });
 
+// Define the cart item type
+interface CartItem {
+  product_id: string | number;
+  product_name: string;
+  product_jp: string;
+  product_price: number;
+  product_img: string;
+  quantity: number;
+}
+
+// Define user profile type
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  postal_code: string | null;
+  role: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export default function CheckoutForm() {
-  const { cart, clearCart } = useCart();
+  const { clearCart } = useCart();
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
   const [error, setError] = useState("");
+  const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -42,14 +70,84 @@ export default function CheckoutForm() {
     cardCVV: "",
   });
 
-  // Totals
-  const subtotal = cart.reduce(
+  // Load user profile and selected items from localStorage
+  useEffect(() => {
+    const loadUserDataAndCartItems = async () => {
+      setIsLoading(true);
+      const supabase = createClient();
+
+      try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          // Fetch user profile from user_profiles table
+          const { data: profile, error: profileError } = await supabase
+            .from("user_profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single();
+
+          if (profileError) {
+            console.error("Error fetching user profile:", profileError);
+          } else if (profile) {
+            setUserProfile(profile);
+            
+            // Parse full name into first and last name
+            let firstName = "";
+            let lastName = "";
+            if (profile.full_name) {
+              const nameParts = profile.full_name.split(" ");
+              firstName = nameParts[0] || "";
+              lastName = nameParts.slice(1).join(" ") || "";
+            }
+
+            // Auto-fill form with user profile data
+            setFormData(prev => ({
+              ...prev,
+              firstName,
+              lastName,
+              email: profile.email || user.email || "",
+              phone: profile.phone || "",
+              address: profile.address || "",
+              city: profile.city || "",
+              postalCode: profile.postal_code || "",
+            }));
+          }
+        }
+
+        // Load selected items from localStorage
+        const storedItems = localStorage.getItem("checkout_items");
+        if (storedItems) {
+          try {
+            const parsedItems = JSON.parse(storedItems);
+            setCheckoutItems(parsedItems);
+          } catch (error) {
+            console.error("Error parsing checkout items:", error);
+            setError("Failed to load cart items");
+          }
+        } else {
+          setError("No items selected for checkout. Please go back to cart and select items.");
+        }
+      } catch (error) {
+        console.error("Error loading user data:", error);
+        setError("Failed to load user information");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadUserDataAndCartItems();
+  }, []);
+
+  // Use checkoutItems for calculations
+  const subtotal = checkoutItems.reduce(
     (sum, item) => sum + item.product_price * item.quantity,
     0
   );
   const shipping = subtotal > 1000 ? 0 : 100;
   const total = subtotal + shipping;
-  const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalQuantity = checkoutItems.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleInputChange = (
     e: React.ChangeEvent<
@@ -65,8 +163,8 @@ export default function CheckoutForm() {
     e.preventDefault();
     setError("");
 
-    if (cart.length === 0) {
-      setError("Your cart is empty!");
+    if (checkoutItems.length === 0) {
+      setError("No items selected for checkout!");
       return;
     }
 
@@ -104,13 +202,11 @@ export default function CheckoutForm() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Payment failed");
 
-      // Supabase integration starts here
+      // Supabase integration
       const supabase = createClient();
 
-      // Get logged-in user (if any)
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      // Get logged-in user
+      const { data: { user } } = await supabase.auth.getUser();
 
       const orderData = {
         orderNumber: `WG${Date.now().toString().slice(-8)}`,
@@ -122,7 +218,7 @@ export default function CheckoutForm() {
           address: `${formData.address}, ${formData.city}, ${formData.postalCode}`,
         },
         paymentMethod: formData.paymentMethod,
-        items: cart,
+        items: checkoutItems,
         subtotal,
         shipping,
         total,
@@ -152,7 +248,7 @@ export default function CheckoutForm() {
       if (orderError) throw new Error("Failed to save order");
 
       // Insert order items
-      const orderItems = cart.map((item) => ({
+      const orderItems = checkoutItems.map((item) => ({
         order_id: order.id,
         product_id: item.product_id,
         product_name: item.product_name,
@@ -168,10 +264,28 @@ export default function CheckoutForm() {
 
       if (itemsError) throw new Error("Failed to save order items");
 
+      // Optionally update user profile with latest information
+      if (user) {
+        await supabase
+          .from("user_profiles")
+          .update({
+            full_name: `${formData.firstName} ${formData.lastName}`,
+            phone: formData.phone,
+            address: formData.address,
+            city: formData.city,
+            postal_code: formData.postalCode,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", user.id);
+      }
+
       // Save for receipt
       localStorage.setItem("lastOrder", JSON.stringify(orderData));
 
-      // 🪙 Redirects for GCash / GrabPay
+      // Clear the checkout items from localStorage after successful order
+      localStorage.removeItem("checkout_items");
+
+      // Redirects for GCash / GrabPay
       if (
         formData.paymentMethod === "gcash" ||
         formData.paymentMethod === "grabpay"
@@ -201,20 +315,36 @@ export default function CheckoutForm() {
     }
   };
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center py-20">
+        <span className="loading loading-spinner loading-lg"></span>
+        <span className="ml-2">Loading your information...</span>
+      </div>
+    );
+  }
+
   // Empty cart
-  if (cart.length === 0 && !orderComplete) {
+  if (checkoutItems.length === 0 && !orderComplete) {
     return (
       <div className="text-center py-20">
         <ShoppingBag className="h-24 w-24 mx-auto text-base-300 mb-4" />
-        <h2 className="text-3xl font-bold mb-4">Your cart is empty</h2>
+        <h2 className="text-3xl font-bold mb-4">No items selected</h2>
         <p className="text-base-content/60 mb-6">
-          Add some delicious wagashi to get started!
+          {error || "Please go back to cart and select items to checkout."}
         </p>
         <button
           className="btn btn-primary"
           onClick={() => router.push("/products")}
         >
           Browse Products
+        </button>
+        <button
+          className="btn btn-ghost ml-2"
+          onClick={() => router.back()}
+        >
+          Back to Cart
         </button>
       </div>
     );
@@ -239,11 +369,19 @@ export default function CheckoutForm() {
     );
   }
 
-  // Checkout Form
   return (
     <div className="w-full">
-      <h1 className="text-4xl font-bold mb-2">Checkout</h1>
-      <p className="text-base-content/60 mb-8">Complete your order</p>
+      <div className="flex justify-between items-center mb-2">
+        <h1 className="text-4xl font-bold">Checkout</h1>
+        {userProfile && (
+          <div>
+          </div>
+        )}
+      </div>
+      <p className="text-base-content/60 mb-8">
+        Complete your order ({checkoutItems.length} selected items)
+        {userProfile && ""}
+      </p>
 
       <form onSubmit={handleSubmit}>
         <div className="grid lg:grid-cols-3 gap-8">
@@ -252,10 +390,18 @@ export default function CheckoutForm() {
             {/* Customer Info */}
             <div className="card bg-base-100 shadow-md">
               <div className="card-body">
-                <h2 className="card-title text-xl mb-4 flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Customer Information
-                </h2>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="card-title text-xl flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    Customer Information
+                  </h2>
+                  {userProfile && (
+                    <div className="text-sm text-success flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4" />
+                      Auto-filled from your profile
+                    </div>
+                  )}
+                </div>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="label">
@@ -321,34 +467,49 @@ export default function CheckoutForm() {
                   Shipping Address
                 </h2>
                 <div className="space-y-4">
-                  <textarea
-                    name="address"
-                    value={formData.address}
-                    onChange={handleInputChange}
-                    className="textarea textarea-bordered w-full"
-                    rows={3}
-                    required
-                    placeholder="Street Address"
-                  />
+                  <div>
+                    <label className="label">
+                      <span className="label-text font-medium">Street Address *</span>
+                    </label>
+                    <textarea
+                      name="address"
+                      value={formData.address}
+                      onChange={handleInputChange}
+                      className="textarea textarea-bordered w-full"
+                      rows={3}
+                      required
+                      placeholder="Enter your complete street address"
+                    />
+                  </div>
                   <div className="grid md:grid-cols-2 gap-4">
-                    <input
-                      type="text"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleInputChange}
-                      placeholder="City"
-                      className="input input-bordered w-full"
-                      required
-                    />
-                    <input
-                      type="text"
-                      name="postalCode"
-                      value={formData.postalCode}
-                      onChange={handleInputChange}
-                      placeholder="Postal Code"
-                      className="input input-bordered w-full"
-                      required
-                    />
+                    <div>
+                      <label className="label">
+                        <span className="label-text font-medium">City *</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="city"
+                        value={formData.city}
+                        onChange={handleInputChange}
+                        placeholder="City"
+                        className="input input-bordered w-full"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="label">
+                        <span className="label-text font-medium">Postal Code *</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="postalCode"
+                        value={formData.postalCode}
+                        onChange={handleInputChange}
+                        placeholder="Postal Code"
+                        className="input input-bordered w-full"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -445,7 +606,7 @@ export default function CheckoutForm() {
                 <h2 className="card-title text-xl mb-4">Order Summary</h2>
 
                 <div className="space-y-3 max-h-[300px] overflow-y-auto mb-4">
-                  {cart.map((item) => (
+                  {checkoutItems.map((item) => (
                     <div
                       key={item.product_id}
                       className="flex gap-3 pb-3 border-b border-base-200"
