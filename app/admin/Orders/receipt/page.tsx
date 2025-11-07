@@ -90,7 +90,7 @@ function AdminOrderReceiptContent() {
     <div className="max-w-5xl mx-auto p-8 space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Order Receipt</h1>
-        <Link href="/admin/orders" className="btn btn-secondary">
+        <Link href="/admin/Orders" className="btn btn-outline">
           ← Back to Orders
         </Link>
       </div>
@@ -104,7 +104,7 @@ function AdminOrderReceiptContent() {
               {new Date(order.created_at).toLocaleString()}
             </p>
           </div>
-          <span className="badge badge-primary text-lg capitalize">
+          <span className="badge badge-primary text-lg capitalize p-2">
             {order.status}
           </span>
         </div>

@@ -13,24 +13,57 @@ interface Product {
   product_price: number;
   product_img: string | null;
   product_desc: string | null;
-  product_category: string | null;
-  product_subcategory: string | null;
+  product_category: string | null; // cat_id
+  product_subcategory: string | null; // subc_id
   product_jp: string | null;
   stock_level: number;
   quantity_sold: number;
 }
 
+interface Category {
+  cat_id: string;
+  cat_name: string;
+  cat_jp: string | null;
+}
+
+interface SubCategory {
+  subc_id: string;
+  subc_name: string;
+  subc_jp: string | null;
+  cat_id: string | null;
+}
+
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<SubCategory[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [subcategory, setSubcategory] = useState("");
   const [stockFilter, setStockFilter] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
   const pageSize = 10;
 
+  // --- Fetch category/subcategory lists ---
+  useEffect(() => {
+    const fetchFilters = async () => {
+      const [{ data: catData }, { data: subData }] = await Promise.all([
+        supabase.from("category").select("*").order("cat_name"),
+        supabase.from("sub_category").select("*").order("subc_name"),
+      ]);
+
+      setCategories(catData || []);
+      setSubcategories(subData || []);
+    };
+
+    fetchFilters();
+  }, []);
+
+  // --- Fetch products with filters ---
   const fetchProducts = async () => {
     setLoading(true);
 
@@ -38,6 +71,7 @@ export default function InventoryPage() {
 
     if (search) query = query.ilike("product_name", `%${search}%`);
     if (category) query = query.eq("product_category", category);
+    if (subcategory) query = query.eq("product_subcategory", subcategory);
     if (stockFilter === "low") query = query.lt("stock_level", 5);
     if (stockFilter === "high") query = query.gte("stock_level", 5);
 
@@ -59,8 +93,9 @@ export default function InventoryPage() {
 
   useEffect(() => {
     fetchProducts();
-  }, [page, search, category, stockFilter]);
+  }, [page, search, category, subcategory, stockFilter]);
 
+  // --- Update stock level ---
   const updateStock = async (id: number, newStock: number) => {
     const { error } = await supabase
       .from("products")
@@ -81,56 +116,86 @@ export default function InventoryPage() {
 
   if (loading) return <p className="p-10 text-center">Loading inventory...</p>;
 
+  // --- Filter subcategories by selected category ---
+  const filteredSubcategories = category
+    ? subcategories.filter((sub) => sub.cat_id === category)
+    : subcategories;
+
   return (
     <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Inventory Management</h1>
 
         <Link href="/admin" className="btn btn-outline">
           ← Back
         </Link>
       </div>
-      <div className="flex justify-between items-center mb-6">
-             
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Search products..."
-            className="input input-bordered"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-          />
-          <select
-            className="select select-bordered"
-            value={category}
-            onChange={(e) => {
-              setCategory(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">All Categories</option>
-            <option value="mochi">Mochi</option>
-            <option value="dorayaki">Dorayaki</option>
-            <option value="manju">Manju</option>
-          </select>
-          <select
-            className="select select-bordered"
-            value={stockFilter}
-            onChange={(e) => {
-              setStockFilter(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">All Stock</option>
-            <option value="low">Low Stock (&lt;5)</option>
-            <option value="high">High Stock (&ge;5)</option>
-          </select>
-        </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <input
+          type="text"
+          placeholder="Search products..."
+          className="input input-bordered"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+        />
+
+        {/* Category Filter */}
+        <select
+          className="select select-bordered"
+          value={category}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setSubcategory(""); // reset subcategory when category changes
+            setPage(1);
+          }}
+        >
+          <option value="">All Categories</option>
+          {categories.map((c) => (
+            <option key={c.cat_id} value={c.cat_id}>
+              {c.cat_name}
+            </option>
+          ))}
+        </select>
+
+        {/* Subcategory Filter */}
+        <select
+          className="select select-bordered"
+          value={subcategory}
+          onChange={(e) => {
+            setSubcategory(e.target.value);
+            setPage(1);
+          }}
+          disabled={!category && filteredSubcategories.length === 0}
+        >
+          <option value="">All Subcategories</option>
+          {filteredSubcategories.map((s) => (
+            <option key={s.subc_id} value={s.subc_id}>
+              {s.subc_name}
+            </option>
+          ))}
+        </select>
+
+        {/* Stock Filter */}
+        <select
+          className="select select-bordered"
+          value={stockFilter}
+          onChange={(e) => {
+            setStockFilter(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">All Stock</option>
+          <option value="low">Low Stock (&lt;5)</option>
+          <option value="high">High Stock (&ge;5)</option>
+        </select>
       </div>
 
+      {/* Table */}
       <div className="overflow-x-auto mx-auto w-full max-w-6xl">
         <table className="table-auto w-full mb-6 text-center">
           <thead>
@@ -139,7 +204,6 @@ export default function InventoryPage() {
               <th className="px-2 py-1">Name</th>
               <th className="px-2 py-1">JP Name</th>
               <th className="px-2 py-1">Category</th>
-              <th className="px-2 py-1">Price</th>
               <th className="px-2 py-1">Stock Level</th>
               <th className="px-2 py-1">Stock Status</th>
               <th className="px-2 py-1">Sold</th>
@@ -164,8 +228,12 @@ export default function InventoryPage() {
                 </td>
                 <td className="px-2 py-1">{p.product_name}</td>
                 <td className="px-2 py-1 text-gray-500 text-sm">{p.product_jp}</td>
-                <td className="px-2 py-1">{p.product_category}</td>
-                <td className="px-2 py-1">₱{Number(p.product_price).toFixed(2)}</td>
+                <td className="px-2 py-1">
+                  {
+                    categories.find((c) => c.cat_id === p.product_category)
+                      ?.cat_name
+                  }
+                </td>
                 <td className="px-2 py-1">
                   <input
                     type="number"
@@ -178,7 +246,9 @@ export default function InventoryPage() {
                 </td>
                 <td className="px-2 py-1">
                   {p.stock_level < 5 ? (
-                    <span className="badge badge-error text-xs p-2">Low Stock</span>
+                    <span className="badge badge-error text-xs p-2">
+                      Low Stock
+                    </span>
                   ) : (
                     <span className="badge badge-success text-xs p-2">Good</span>
                   )}
@@ -215,7 +285,9 @@ export default function InventoryPage() {
               <button
                 key={pageNum}
                 onClick={() => setPage(pageNum)}
-                className={`btn ${page === pageNum ? "btn-primary" : "btn-outline"}`}
+                className={`btn ${
+                  page === pageNum ? "btn-primary" : "btn-outline"
+                }`}
               >
                 {pageNum}
               </button>

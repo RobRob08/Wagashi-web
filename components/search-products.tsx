@@ -24,6 +24,7 @@ type Product = {
   product_category: string | null;
   product_subcategory: string | null;
   product_jp: string;
+  stock_level: number;
 };
 
 type SubCategory = {
@@ -58,8 +59,10 @@ export default function SearchProducts() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleOpenDetails = (product: Product) => {
-    setSelectedProduct(product);
-    setIsModalOpen(true);
+    if (product.stock_level > 0) {
+      setSelectedProduct(product);
+      setIsModalOpen(true);
+    }
   };
 
   const handleCloseModal = () => {
@@ -97,12 +100,8 @@ export default function SearchProducts() {
       }
 
       // Price filter
-      if (minPrice) {
-        query = query.gte("product_price", parseFloat(minPrice));
-      }
-      if (maxPrice) {
-        query = query.lte("product_price", parseFloat(maxPrice));
-      }
+      if (minPrice) query = query.gte("product_price", parseFloat(minPrice));
+      if (maxPrice) query = query.lte("product_price", parseFloat(maxPrice));
 
       // Sorting
       switch (sortBy) {
@@ -124,9 +123,8 @@ export default function SearchProducts() {
 
       const { data, error, count } = await query;
 
-      if (error) {
-        console.error(error);
-      } else {
+      if (error) console.error(error);
+      else {
         setProducts((data as Product[]) ?? []);
         setTotalCount(count ?? 0);
       }
@@ -276,28 +274,45 @@ export default function SearchProducts() {
             </p>
           </div>
 
-          {/* Products Grid */}
+          {/* Products */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full overflow-x-hidden">
             {products.map((product) => (
               <div
                 key={product.product_id}
-                className="card rounded-lg shadow-md overflow-hidden flex flex-col hover:shadow-xl transition-shadow"
+                className={`card rounded-lg shadow-md overflow-hidden flex flex-col hover:shadow-xl transition-shadow ${
+                  product.stock_level === 0 ? "opacity-70" : ""
+                }`}
               >
                 <figure
-                  className="relative w-full h-64 overflow-hidden cursor-pointer"
+                  className={`relative w-full h-64 overflow-hidden ${
+                    product.stock_level === 0
+                      ? "cursor-not-allowed"
+                      : "cursor-pointer"
+                  }`}
                   onClick={() => handleOpenDetails(product)}
                 >
                   <Image
                     src={`/prod/${product.product_img}`}
                     alt={product.product_name}
                     fill
-                    className="object-cover w-full h-full hover:scale-105 transition-transform duration-300"
+                    className={`object-cover w-full h-full transition-transform duration-300 ${
+                      product.stock_level > 0 ? "hover:scale-105" : ""
+                    }`}
                   />
+                  {product.stock_level === 0 && (
+                    <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white font-semibold text-lg">
+                      Out of Stock
+                    </div>
+                  )}
                 </figure>
 
                 <div className="card-body pt-4 px-4 flex flex-col flex-1">
                   <h2
-                    className="card-title mb-2 text-lg font-semibold cursor-pointer hover:text-primary transition-colors"
+                    className={`card-title mb-2 text-lg font-semibold ${
+                      product.stock_level > 0
+                        ? "cursor-pointer hover:text-primary transition-colors"
+                        : "opacity-70 cursor-not-allowed"
+                    }`}
                     onClick={() => handleOpenDetails(product)}
                   >
                     {product.product_name}
@@ -305,63 +320,77 @@ export default function SearchProducts() {
                       {product.product_jp}
                     </p>
                   </h2>
+
                   <p className="text-sm text-muted-foreground line-clamp-3 flex-grow">
                     {product.product_desc}
                   </p>
+
                   <div className="flex justify-between items-center mt-4">
-                    <h1 className="text-2xl font-bold">
-                      ₱ {product.product_price}
-                    </h1>
-                    <motion.button
-                      className={`btn ${
-                        recentlyAdded.has(product.product_id)
-                          ? "btn-success"
-                          : "btn-black"
-                      } transition-colors`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addToCart({
-                          product_id: product.product_id,
-                          product_name: product.product_name,
-                          product_price: product.product_price,
-                          product_img: product.product_img,
-                          product_jp: product.product_jp,
-                        });
+                    <div>
+                      <h1 className="text-2xl font-bold">
+                        ₱ {product.product_price}
+                      </h1>
+                      <p
+                        className={`text-sm font-medium mt-1 ${
+                          product.stock_level > 0
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {product.stock_level > 0
+                          ? "Available"
+                          : "Out of Stock"}
+                      </p>
+                    </div>
 
-                        // Add to recently added set
-                        setRecentlyAdded((prev) =>
-                          new Set(prev).add(product.product_id)
-                        );
-
-                        // Remove after animation
-                        setTimeout(() => {
-                          setRecentlyAdded((prev) => {
-                            const newSet = new Set(prev);
-                            newSet.delete(product.product_id);
-                            return newSet;
+                    {/* Add to Cart (hidden when out of stock) */}
+                    {product.stock_level > 0 && (
+                      <motion.button
+                        className={`btn ${
+                          recentlyAdded.has(product.product_id)
+                            ? "btn-success"
+                            : "btn-black"
+                        } transition-colors`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addToCart({
+                            product_id: product.product_id,
+                            product_name: product.product_name,
+                            product_price: product.product_price,
+                            product_img: product.product_img,
+                            product_jp: product.product_jp,
                           });
-                        }, 1000);
-                      }}
-                      whileTap={{ scale: 0.95 }}
-                      whileHover={{ scale: 1.05 }}
-                      transition={{
-                        type: "spring",
-                        stiffness: 400,
-                        damping: 17,
-                      }}
-                    >
-                      {recentlyAdded.has(product.product_id) ? (
-                        <>
-                          <Check className="w-5 h-5" />
-                          Added!
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingBag />
-                          Add to Cart
-                        </>
-                      )}
-                    </motion.button>
+
+                          setRecentlyAdded((prev) =>
+                            new Set(prev).add(product.product_id)
+                          );
+                          setTimeout(() => {
+                            setRecentlyAdded((prev) => {
+                              const newSet = new Set(prev);
+                              newSet.delete(product.product_id);
+                              return newSet;
+                            });
+                          }, 1000);
+                        }}
+                        whileTap={{ scale: 0.95 }}
+                        whileHover={{ scale: 1.05 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 400,
+                          damping: 17,
+                        }}
+                      >
+                        {recentlyAdded.has(product.product_id) ? (
+                          <>
+                            <Check className="w-5 h-5" /> Added!
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingBag /> Add to Cart
+                          </>
+                        )}
+                      </motion.button>
+                    )}
                   </div>
                 </div>
               </div>

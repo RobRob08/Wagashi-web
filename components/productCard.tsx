@@ -50,24 +50,26 @@ export default function ProductCard() {
   const pageSize = 9;
   const [totalCount, setTotalCount] = useState(0);
 
-  // Track which buttons were recently clicked for animation
+  // Recently added animation
   const [recentlyAdded, setRecentlyAdded] = useState<Set<number>>(new Set());
 
-  // Product details modal state
+  // Product details modal
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleOpenDetails = (product: Product) => {
-    setSelectedProduct(product);
-    setIsModalOpen(true);
+    if (product.stock_level > 0) {
+      setSelectedProduct(product);
+      setIsModalOpen(true);
+    }
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setTimeout(() => setSelectedProduct(null), 300); // Clear after animation
+    setTimeout(() => setSelectedProduct(null), 300);
   };
 
-  // Load categories + subcategories
+  // Fetch filters
   useEffect(() => {
     const fetchFilters = async () => {
       const { data: subs } = await supabase.from("sub_category").select("*");
@@ -76,7 +78,7 @@ export default function ProductCard() {
     fetchFilters();
   }, [supabase]);
 
-  // Fetch products with filters + pagination
+  // Fetch products
   useEffect(() => {
     const fetchProducts = async () => {
       let query = supabase
@@ -104,6 +106,7 @@ export default function ProductCard() {
   return (
     <div className="p-6 w-full overflow-x-hidden">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Sidebar Filters */}
         <aside className="md:col-span-1 shadow-sm rounded-lg p-4 h-fit">
           <h2 className="font-bold text-lg mb-4">Filters</h2>
 
@@ -136,28 +139,47 @@ export default function ProductCard() {
           </select>
         </aside>
 
+        {/* Product Grid */}
         <main className="md:col-span-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-6 w-full overflow-x-hidden">
             {products.map((product) => (
               <div
                 key={product.product_id}
-                className="card rounded-lg shadow-md overflow-hidden flex flex-col hover:shadow-xl transition-shadow"
+                className={`card rounded-lg shadow-md overflow-hidden flex flex-col hover:shadow-xl transition-shadow ${
+                  product.stock_level === 0 ? "opacity-70" : ""
+                }`}
               >
+                {/* Product Image */}
                 <figure
-                  className="relative w-full h-64 overflow-hidden cursor-pointer"
+                  className={`relative w-full h-64 overflow-hidden ${
+                    product.stock_level === 0 ? "cursor-not-allowed" : "cursor-pointer"
+                  }`}
                   onClick={() => handleOpenDetails(product)}
                 >
                   <Image
                     src={`/prod/${product.product_img}`}
                     alt={product.product_name}
                     fill
-                    className="object-cover w-full h-full hover:scale-105 transition-transform duration-300"
+                    className={`object-cover w-full h-full transition-transform duration-300 ${
+                      product.stock_level > 0 ? "hover:scale-105" : ""
+                    }`}
                   />
+
+                  {product.stock_level === 0 && (
+                    <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white font-semibold text-lg">
+                      Out of Stock
+                    </div>
+                  )}
                 </figure>
 
+                {/* Product Info */}
                 <div className="card-body pt-4 px-4 flex flex-col flex-1">
                   <h2
-                    className="card-title mb-2 text-lg font-semibold cursor-pointer hover:text-primary transition-colors"
+                    className={`card-title mb-2 text-lg font-semibold ${
+                      product.stock_level > 0
+                        ? "cursor-pointer hover:text-primary transition-colors"
+                        : "opacity-70 cursor-not-allowed"
+                    }`}
                     onClick={() => handleOpenDetails(product)}
                   >
                     {product.product_name}
@@ -177,72 +199,74 @@ export default function ProductCard() {
                       </h1>
                       <p
                         className={`text-sm font-medium mt-1 ${
-                          product.stock_level > 0 ? "text-green-600" : "text-red-600"
+                          product.stock_level > 0
+                            ? "text-green-600"
+                            : "text-red-600"
                         }`}
                       >
                         {product.stock_level > 0 ? "Available" : "Out of Stock"}
                       </p>
                     </div>
 
-                    <motion.button
-                      className={`btn ${
-                        recentlyAdded.has(product.product_id)
-                          ? "btn-success"
-                          : product.stock_level === 0
-                          ? "btn-disabled cursor-not-allowed"
-                          : "btn-black"
-                      } transition-colors`}
-                      disabled={product.stock_level === 0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (product.stock_level === 0) return;
+                    {/* Hide Add to Cart if Out of Stock */}
+                    {product.stock_level > 0 && (
+                      <motion.button
+                        className={`btn ${
+                          recentlyAdded.has(product.product_id)
+                            ? "btn-success"
+                            : "btn-black"
+                        } transition-colors`}
+                        onClick={(e) => {
+                          e.stopPropagation();
 
-                        addToCart({
-                          product_id: product.product_id,
-                          product_name: product.product_name,
-                          product_price: product.product_price,
-                          product_img: product.product_img,
-                          product_jp: product.product_jp,
-                        });
-
-                        setRecentlyAdded((prev) =>
-                          new Set(prev).add(product.product_id)
-                        );
-
-                        setTimeout(() => {
-                          setRecentlyAdded((prev) => {
-                            const newSet = new Set(prev);
-                            newSet.delete(product.product_id);
-                            return newSet;
+                          addToCart({
+                            product_id: product.product_id,
+                            product_name: product.product_name,
+                            product_price: product.product_price,
+                            product_img: product.product_img,
+                            product_jp: product.product_jp,
                           });
-                        }, 1000);
-                      }}
-                      whileTap={{ scale: 0.95 }}
-                      whileHover={product.stock_level === 0 ? {} : { scale: 1.05 }}
-                      transition={{
-                        type: "spring",
-                        stiffness: 400,
-                        damping: 17,
-                      }}
-                    >
-                      {recentlyAdded.has(product.product_id) ? (
-                        <>
-                          <Check className="w-5 h-5" />
-                          Added!
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingBag />
-                          Add to Cart
-                        </>
-                      )}
-                    </motion.button>
+
+                          setRecentlyAdded((prev) =>
+                            new Set(prev).add(product.product_id)
+                          );
+
+                          setTimeout(() => {
+                            setRecentlyAdded((prev) => {
+                              const newSet = new Set(prev);
+                              newSet.delete(product.product_id);
+                              return newSet;
+                            });
+                          }, 1000);
+                        }}
+                        whileTap={{ scale: 0.95 }}
+                        whileHover={{ scale: 1.05 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 400,
+                          damping: 17,
+                        }}
+                      >
+                        {recentlyAdded.has(product.product_id) ? (
+                          <>
+                            <Check className="w-5 h-5" />
+                            Added!
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingBag />
+                            Add to Cart
+                          </>
+                        )}
+                      </motion.button>
+                    )}
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
+          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-center items-center mt-6 gap-2">
               <button
@@ -259,7 +283,9 @@ export default function ProductCard() {
                   <button
                     key={pageNum}
                     onClick={() => setPage(pageNum)}
-                    className={`btn ${page === pageNum ? "btn-primary" : "btn-outline"}`}
+                    className={`btn ${
+                      page === pageNum ? "btn-primary" : "btn-outline"
+                    }`}
                   >
                     {pageNum}
                   </button>
