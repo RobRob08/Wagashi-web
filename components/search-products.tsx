@@ -4,8 +4,9 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Yuji_Boku } from "next/font/google";
-import { ShoppingBag, Check } from "lucide-react";
+import { ShoppingBag, Check, Heart } from "lucide-react";
 import { useCart } from "@/app/context/cartcontext";
+import { useWishlist } from "@/app/context/wishlistcontext";
 import { motion } from "motion/react";
 import ProductDetailsModal from "./product-details-modal";
 
@@ -36,6 +37,7 @@ type SubCategory = {
 export default function SearchProducts() {
   const supabase = createClient();
   const { addToCart } = useCart();
+  const { addToWishlist, removeFromWishlist, wishlist } = useWishlist();
 
   // Data
   const [products, setProducts] = useState<Product[]>([]);
@@ -68,6 +70,27 @@ export default function SearchProducts() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setTimeout(() => setSelectedProduct(null), 300);
+  };
+
+  // Check if product is in wishlist
+  const isInWishlist = (productId: number) => {
+    return wishlist.some((item) => item.product_id === productId);
+  };
+
+  // Toggle wishlist
+  const handleToggleWishlist = (product: Product, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isInWishlist(product.product_id)) {
+      removeFromWishlist(product.product_id);
+    } else {
+      addToWishlist({
+        product_id: product.product_id,
+        product_name: product.product_name,
+        product_price: product.product_price,
+        product_img: product.product_img,
+        product_jp: product.product_jp,
+      });
+    }
   };
 
   // Load categories + subcategories
@@ -304,6 +327,21 @@ export default function SearchProducts() {
                       Out of Stock
                     </div>
                   )}
+                  {/* Wishlist Heart Icon */}
+                  <motion.button
+                    className="absolute top-3 right-3 btn btn-circle btn-sm bg-white/90 hover:bg-white border-none"
+                    onClick={(e) => handleToggleWishlist(product, e)}
+                    whileTap={{ scale: 0.9 }}
+                    whileHover={{ scale: 1.1 }}
+                  >
+                    <Heart
+                      className={`w-5 h-5 ${
+                        isInWishlist(product.product_id)
+                          ? "fill-red-500 text-red-500"
+                          : "text-gray-600"
+                      }`}
+                    />
+                  </motion.button>
                 </figure>
 
                 <div className="card-body pt-4 px-4 flex flex-col flex-1">

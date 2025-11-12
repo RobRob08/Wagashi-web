@@ -4,16 +4,18 @@ import { useEffect, useState } from "react";
 import { hasEnvVars } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Search, Heart } from "lucide-react";
 import Cart from "./cart-modal";
 import { EnvVarWarning } from "@/components/env-var-warning";
 import { AuthButton } from "@/components/auth-button";
 import { createClient } from "@/lib/supabase/client";
+import { useWishlist } from "@/app/context/wishlistcontext";
 
 export default function Navbar() {
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
+  const { wishlist } = useWishlist();
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -102,10 +104,31 @@ export default function Navbar() {
           {/* Icons */}
           <div className="flex items-center gap-6">
             {role !== "admin" && (
-              <Link href="/search" className="btn btn-ghost btn-circle btn-sm">
-                <Search className="h-5 w-5" />
-              </Link>
+              <>
+                {/* Search Icon */}
+                <Link href="/search" className="btn btn-ghost btn-circle btn-sm">
+                  <Search className="h-5 w-5" />
+                </Link>
+
+                {/* Wishlist Icon with DaisyUI Indicator */}
+                <div className="indicator">
+                  <Link
+                    href="/wishlist"
+                    className="btn btn-ghost btn-circle btn-sm"
+                  >
+                    <Heart
+                      className={`h-5 w-5 ${wishlist.length > 0 ? 'fill-red-500 text-red-500' : ''}`}
+                    />
+                  </Link>
+                  {wishlist.length > 0 && (
+                    <span className="badge badge-sm indicator-item bg-transparent border-0 text-primary font-bold">
+                      {wishlist.length}
+                    </span>
+                  )}
+                </div>
+              </>
             )}
+
             {role !== "admin" && <Cart />}
             {!hasEnvVars ? <EnvVarWarning /> : <AuthButton />}
           </div>

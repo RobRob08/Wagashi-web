@@ -245,12 +245,14 @@ export default function InventoryPage() {
                   />
                 </td>
                 <td className="px-2 py-1">
-                  {p.stock_level < 5 ? (
+                  {  p.stock_level === 0 ? (
                     <span className="badge badge-error text-xs p-2">
-                      Low Stock
+                      No Stock
                     </span>
+                  ) : p.stock_level < 5 ? (
+                    <span className="badge badge-warning text-xs p-2">Low Stock</span>
                   ) : (
-                    <span className="badge badge-success text-xs p-2">Good</span>
+                    <span className="badge badge-success text-xs p-2">In Stock</span>
                   )}
                 </td>
                 <td className="px-2 py-1">{p.quantity_sold}</td>

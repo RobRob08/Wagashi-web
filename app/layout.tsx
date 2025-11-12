@@ -6,6 +6,7 @@ import { CartProvider } from "./context/cartcontext";
 import "./globals.css";
 import { DaisyThemeSync } from "@/components/daisyui-sync";
 import { NotificationContainer } from "@/components/notification-container";
+import { WishlistProvider } from "./context/wishlistcontext";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -29,11 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${geistSans.className} antialiased`}
-    >
+    <html lang="en" suppressHydrationWarning className={`${geistSans.className} antialiased`}>
       <body>
         <ThemeProvider
           attribute="class"
@@ -42,9 +39,12 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <DaisyThemeSync />
+          {/* Wrap both CartProvider and WishlistProvider inside ThemeProvider */}
           <CartProvider>
-            <NotificationContainer />
-            {children}
+            <WishlistProvider>
+              <NotificationContainer />
+              {children} {/* Main content goes here */}
+            </WishlistProvider>
           </CartProvider>
         </ThemeProvider>
       </body>
