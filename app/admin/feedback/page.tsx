@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 
 interface Feedback {
   id: number;
@@ -10,7 +11,9 @@ interface Feedback {
   email: string | null;
   message: string | null;
   created_at: string;
-  user_email?: string | null; // join to auth.users
+  user_full_name?: string | null;
+  user_phone?: string | null;
+  user_address?: string | null;
 }
 
 export default function AdminFeedbackDashboard() {
@@ -23,7 +26,7 @@ export default function AdminFeedbackDashboard() {
     const fetchFeedbacks = async () => {
       setLoading(true);
 
-      // Fetch feedback and join with auth.users to get user email
+      // Fetch feedback and join with user_profiles
       const { data, error } = await supabase
         .from("feedback")
         .select(`
@@ -33,22 +36,20 @@ export default function AdminFeedbackDashboard() {
           email,
           message,
           created_at,
-          user:user_id (
-            email
-          )
+          user_profile:user_profiles(full_name, phone, address, city, postal_code)
         `)
         .order("created_at", { ascending: false });
 
       setLoading(false);
 
       if (error) {
-        console.error(error);
+        console.error("Error fetching feedbacks:", error.message);
         setError("Failed to fetch feedbacks.");
         return;
       }
 
       if (data) {
-        // Flatten user email
+        // Flatten the user profile (assume it's an array and take the first element)
         const formatted = data.map((f) => ({
           id: f.id,
           user_id: f.user_id,
@@ -56,7 +57,9 @@ export default function AdminFeedbackDashboard() {
           email: f.email,
           message: f.message,
           created_at: f.created_at,
-          user_email: f.user?.[0]?.email ?? null,
+          user_full_name: f.user_profile?.[0]?.full_name ?? "N/A", // Get the first profile or N/A
+          user_phone: f.user_profile?.[0]?.phone ?? "N/A", // Handle multiple profiles if any
+          user_address: f.user_profile?.[0]?.address ?? "N/A", // Handle multiple profiles if any
         }));
         setFeedbacks(formatted);
       }
@@ -68,7 +71,9 @@ export default function AdminFeedbackDashboard() {
   return (
     <div className="max-w-5xl mx-auto py-10">
       <h1 className="text-2xl font-bold mb-6">Feedback Dashboard</h1>
-
+        <Link href="/admin" className="btn btn-outline">
+          ← Back
+        </Link>
       {loading && <p>Loading feedbacks...</p>}
       {error && <p className="text-error">{error}</p>}
 
@@ -82,8 +87,9 @@ export default function AdminFeedbackDashboard() {
             <tr className="bg-gray-100">
               <th className="px-4 py-2 border">ID</th>
               <th className="px-4 py-2 border">User Email</th>
-              <th className="px-4 py-2 border">Name</th>
-              <th className="px-4 py-2 border">Email</th>
+              <th className="px-4 py-2 border">Full Name</th>
+              <th className="px-4 py-2 border">Phone</th>
+              <th className="px-4 py-2 border">Address</th>
               <th className="px-4 py-2 border">Message</th>
               <th className="px-4 py-2 border">Created At</th>
             </tr>
@@ -92,9 +98,10 @@ export default function AdminFeedbackDashboard() {
             {feedbacks.map((f) => (
               <tr key={f.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2 border">{f.id}</td>
-                <td className="px-4 py-2 border">{f.user_email ?? "Guest"}</td>
-                <td className="px-4 py-2 border">{f.name ?? "-"}</td>
-                <td className="px-4 py-2 border">{f.email ?? "-"}</td>
+                <td className="px-4 py-2 border">{f.email ?? "Guest"}</td>
+                <td className="px-4 py-2 border">{f.user_full_name}</td>
+                <td className="px-4 py-2 border">{f.user_phone}</td>
+                <td className="px-4 py-2 border">{f.user_address}</td>
                 <td className="px-4 py-2 border">{f.message}</td>
                 <td className="px-4 py-2 border">
                   {new Date(f.created_at).toLocaleString()}

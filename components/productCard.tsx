@@ -22,11 +22,7 @@ type Product = {
   stock_level: number;
 };
 
-type SubCategory = {
-  subc_id: string;
-  subc_name: string;
-  subc_jp: string | null;
-};
+
 
 const yuji = Yuji_Boku({
   weight: "400",
@@ -39,11 +35,10 @@ export default function ProductCard() {
 
   // Data
   const [products, setProducts] = useState<Product[]>([]);
-  const [subcategories, setSubcategories] = useState<SubCategory[]>([]);
 
   // Filters
-  const [search, setSearch] = useState("");
-  const [subcategory, setSubcategory] = useState("all");
+  const [search] = useState("");
+  const [subcategory] = useState("all");
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -70,13 +65,6 @@ export default function ProductCard() {
   };
 
   // Fetch filters
-  useEffect(() => {
-    const fetchFilters = async () => {
-      const { data: subs } = await supabase.from("sub_category").select("*");
-      setSubcategories(subs ?? []);
-    };
-    fetchFilters();
-  }, [supabase]);
 
   // Fetch products
   useEffect(() => {
@@ -107,40 +95,10 @@ export default function ProductCard() {
     <div className="p-6 w-full overflow-x-hidden">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Sidebar Filters */}
-        <aside className="md:col-span-1 shadow-sm rounded-lg p-4 h-fit">
-          <h2 className="font-bold text-lg mb-4">Filters</h2>
-
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="input input-bordered w-full mb-4"
-          />
-
-          <label className="block text-sm font-medium mb-2">Category</label>
-          <select
-            value={subcategory}
-            onChange={(e) => {
-              setSubcategory(e.target.value);
-              setPage(1);
-            }}
-            className="select select-bordered w-full"
-          >
-            <option value="all">All Categories</option>
-            {subcategories.map((sub) => (
-              <option key={sub.subc_id} value={sub.subc_id}>
-                {sub.subc_name}
-              </option>
-            ))}
-          </select>
-        </aside>
+        
 
         {/* Product Grid */}
-        <main className="md:col-span-3">
+        <main className="md:col-span-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-6 w-full overflow-x-hidden">
             {products.map((product) => (
               <div
