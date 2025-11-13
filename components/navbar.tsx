@@ -64,6 +64,7 @@ export default function Navbar() {
     { href: "/admin/Users", label: "User Management" },
     { href: "/admin/Orders", label: "Order Management" },
     { href: "/admin/Inventory", label: "Inventory Management" },
+    { href: "/admin/feedback", label: "Inventory Management" },
     { href: "/admin/CMS", label: "CMS" },
   ];
 

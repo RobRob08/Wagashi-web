@@ -26,7 +26,7 @@ const yuji = Yuji_Boku({
 });
 
 interface OrderItem {
-  id: string;
+  id?: string;
   product_id: number;
   product_name: string;
   product_jp: string;
@@ -52,11 +52,25 @@ interface OrderData {
   total: number;
 }
 
-function OrderReceiptContent() {
-  const [orderData, setOrderData] = useState<OrderData | null>(null);
-  const [error, setError] = useState("");
+interface SupabaseOrder {
+  id: string;
+  order_number: string;
+  created_at: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string | null;
+  customer_address?: string | null;
+  payment_method: string;
+  subtotal: number;
+  shipping: number;
+  total: number;
+  user_id: string;
+}
+
+export default function ReceiptPage() {
   const searchParams = useSearchParams();
-  const orderNumber = searchParams.get("orderNumber");
+  const [orderData, setOrderData] = useState<OrderData | null>(null);
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -64,69 +78,93 @@ function OrderReceiptContent() {
         const { data: userData } = await supabase.auth.getUser();
         const user = userData?.user;
 
-        if (!orderNumber && !user) {
-          // Try fallback
+        const orderNumber = searchParams.get("orderNumber");
+
+        let order: SupabaseOrder | null = null;
+        let items: OrderItem[] = [];
+
+        // Fetch from Supabase
+        if (orderNumber && user) {
+          const { data, error } = await supabase
+            .from<SupabaseOrder>("orders")
+            .select("*")
+            .eq("order_number", orderNumber)
+            .eq("user_id", user.id)
+            .single();
+
+          if (!error && data) order = data;
+
+          if (order) {
+            const { data: itemsData, error: itemsError } = await supabase
+              .from<OrderItem>("order_items")
+              .select("*")
+              .eq("order_id", order.id);
+
+            if (!itemsError && itemsData) items = itemsData;
+          }
+        }
+
+        // Fallback to localStorage
+        if (!order) {
           const stored = localStorage.getItem("lastOrder");
-          if (stored) setOrderData(JSON.parse(stored));
-          return;
+          if (stored) {
+            const parsed = JSON.parse(stored) as SupabaseOrder & { items?: OrderItem[] };
+            order = parsed;
+            items = parsed.items ?? [];
+          } else {
+            setError("Order not found.");
+            return;
+          }
         }
 
-        // Fetch order owned by this user
-        const { data: order, error: orderError } = await supabase
-          .from("orders")
-          .select("*")
-          .eq("order_number", orderNumber)
-          .eq("user_id", user?.id)
-          .single();
-
-        if (orderError || !order) {
-          console.error("Order fetch error:", orderError);
-          setError("Order not found or access denied.");
-          return;
+        // Set state
+        if (order) {
+          setOrderData({
+            id: order.id,
+            orderNumber: order.order_number,
+            date: new Date(order.created_at).toLocaleString(),
+            customerInfo: {
+              name: order.customer_name,
+              email: order.customer_email,
+              phone: order.customer_phone ?? "",
+              address: order.customer_address ?? "",
+            },
+            paymentMethod: order.payment_method,
+            items: items,
+            subtotal: Number(order.subtotal),
+            shipping: Number(order.shipping),
+            total: Number(order.total),
+          });
         }
-
-        const { data: items, error: itemsError } = await supabase
-          .from("order_items")
-          .select("*")
-          .eq("order_id", order.id);
-
-        if (itemsError) throw itemsError;
-
-        setOrderData({
-          id: order.id,
-          orderNumber: order.order_number,
-          date: new Date(order.created_at).toLocaleString(),
-          customerInfo: {
-            name: order.customer_name,
-            email: order.customer_email,
-            phone: order.customer_phone || "",
-            address: order.customer_address || "",
-          },
-          paymentMethod: order.payment_method,
-          items: items.map((i) => ({
-            id: i.id,
-            product_id: i.product_id,
-            product_name: i.product_name,
-            product_jp: i.product_jp,
-            product_price: Number(i.product_price),
-            product_img: i.product_img,
-            quantity: i.quantity,
-          })),
-          subtotal: Number(order.subtotal),
-          shipping: Number(order.shipping),
-          total: Number(order.total),
-        });
       } catch (err) {
         console.error("Receipt error:", err);
-        setError("Something went wrong fetching your receipt.");
+        const stored = localStorage.getItem("lastOrder");
+        if (stored) {
+          const parsed = JSON.parse(stored) as SupabaseOrder & { items?: OrderItem[] };
+          setOrderData({
+            id: parsed.id,
+            orderNumber: parsed.order_number,
+            date: new Date(parsed.created_at).toLocaleString(),
+            customerInfo: {
+              name: parsed.customer_name,
+              email: parsed.customer_email,
+              phone: parsed.customer_phone ?? "",
+              address: parsed.customer_address ?? "",
+            },
+            paymentMethod: parsed.payment_method,
+            items: parsed.items ?? [],
+            subtotal: Number(parsed.subtotal),
+            shipping: Number(parsed.shipping),
+            total: Number(parsed.total),
+          });
+        } else {
+          setError("Something went wrong fetching your receipt.");
+        }
       }
     };
 
     fetchOrder();
-  }, [orderNumber]);
-
-  const handlePrint = () => window.print();
-  const handleDownload = () => alert("PDF download coming soon!");
+  }, [searchParams]);
 
   if (error) {
     return (
@@ -149,6 +187,26 @@ function OrderReceiptContent() {
   }
 
   return (
+    <Suspense fallback={<div>Loading receipt...</div>}>
+      <main className="min-h-screen min-w-screen flex flex-col items-center bg-base-200">
+        <div className="flex-1 w-full flex flex-col items-center">
+          <Navbar />
+          <div className="flex justify-center w-full px-4 py-8">
+            <div className="w-full max-w-4xl space-y-6">
+              <OrderReceiptContent orderData={orderData} />
+            </div>
+          </div>
+        </div>
+      </main>
+    </Suspense>
+  );
+}
+
+function OrderReceiptContent({ orderData }: { orderData: OrderData }) {
+  const handlePrint = () => window.print();
+  const handleDownload = () => alert("PDF download coming soon!");
+
+  return (
     <div className="space-y-6">
       {/* Header */}
       <div className="card bg-base-100 shadow-lg text-center">
@@ -169,15 +227,11 @@ function OrderReceiptContent() {
           <div className="flex justify-between border-b pb-4 mb-6">
             <div>
               <h2 className="text-3xl font-bold mb-2">Wagashi</h2>
-              <p className="text-sm text-base-content/60">
-                Traditional Japanese Confections
-              </p>
+              <p className="text-sm text-base-content/60">Traditional Japanese Confections</p>
             </div>
             <div className="text-right">
               <p className="text-sm text-base-content/60">Order Number</p>
-              <p className="text-2xl font-bold text-primary">
-                #{orderData.orderNumber}
-              </p>
+              <p className="text-2xl font-bold text-primary">#{orderData.orderNumber}</p>
               <div className="flex items-center justify-end gap-2 text-sm text-base-content/60 mt-1">
                 <Calendar className="h-4 w-4" />
                 {orderData.date}
@@ -195,9 +249,7 @@ function OrderReceiptContent() {
               <p className="flex items-center gap-2 text-sm text-base-content/60">
                 <Mail className="h-4 w-4" /> {orderData.customerInfo.email}
               </p>
-              <p className="text-sm text-base-content/60">
-                {orderData.customerInfo.phone}
-              </p>
+              <p className="text-sm text-base-content/60">{orderData.customerInfo.phone}</p>
             </div>
             <div>
               <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
@@ -206,9 +258,7 @@ function OrderReceiptContent() {
               <p className="text-sm">{orderData.customerInfo.address}</p>
               <p className="flex items-center gap-2 text-sm mt-2">
                 <CreditCard className="h-4 w-4" />
-                <span className="capitalize">
-                  {orderData.paymentMethod}
-                </span>
+                <span className="capitalize">{orderData.paymentMethod}</span>
               </p>
             </div>
           </div>
@@ -227,8 +277,8 @@ function OrderReceiptContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orderData.items.map((item) => (
-                    <tr key={item.id}>
+                  {orderData.items.map((item, index) => (
+                    <tr key={item.id ?? `${item.product_id}-${index}`}>
                       <td>
                         <div className="flex items-center gap-3">
                           {item.product_img && (
@@ -242,23 +292,17 @@ function OrderReceiptContent() {
                             </div>
                           )}
                           <div>
-                            <p className="font-medium">
-                              {item.product_name}
-                            </p>
-                            <p
-                              className={`${yuji.className} text-xs text-base-content/60`}
-                            >
+                            <p className="font-medium">{item.product_name}</p>
+                            <p className={`${yuji.className} text-xs text-base-content/60`}>
                               {item.product_jp}
                             </p>
                           </div>
                         </div>
                       </td>
-                      <td className="text-center">{item.quantity}</td>
-                      <td className="text-right">
-                        ₱{item.product_price.toFixed(2)}
-                      </td>
+                      <td className="text-center">{item.quantity ?? 0}</td>
+                      <td className="text-right">₱{(item.product_price ?? 0).toFixed(2)}</td>
                       <td className="text-right font-semibold">
-                        ₱{(item.product_price * item.quantity).toFixed(2)}
+                        ₱{((item.product_price ?? 0) * (item.quantity ?? 0)).toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -276,17 +320,11 @@ function OrderReceiptContent() {
               </div>
               <div className="flex justify-between text-sm">
                 <span>Shipping:</span>
-                <span>
-                  {orderData.shipping === 0
-                    ? "FREE"
-                    : `₱${orderData.shipping.toFixed(2)}`}
-                </span>
+                <span>{orderData.shipping === 0 ? "FREE" : `₱${orderData.shipping.toFixed(2)}`}</span>
               </div>
               <div className="flex justify-between font-bold text-lg border-t pt-2">
                 <span>Total:</span>
-                <span className="text-primary">
-                  ₱{orderData.total.toFixed(2)}
-                </span>
+                <span className="text-primary">₱{orderData.total.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -308,22 +346,3 @@ function OrderReceiptContent() {
     </div>
   );
 }
-
-export default function ReceiptPage() {
-  return (
-    <Suspense fallback={<div>Loading receipt...</div>}>
-      <main className="min-h-screen min-w-screen flex flex-col items-center bg-base-200">
-      <div className="flex-1 w-full flex flex-col items-center">
-        <Navbar />
-        <div className="flex justify-center w-full px-4 py-8">
-          <div className="w-full max-w-4xl">
-            <OrderReceiptContent />
-          </div>
-        </div>
-      </div>
-    </main>
-    </Suspense>
-  );
-}
-
- 

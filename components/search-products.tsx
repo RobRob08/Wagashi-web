@@ -60,6 +60,19 @@ export default function SearchProducts() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // --- Helper to resolve image URL ---
+  const getProductImageUrl = (productImg: string | null) => {
+    if (!productImg) return "/default-image.png";
+
+    // 1️⃣ Supabase or external image
+    if (productImg.startsWith("http")) {
+      return productImg;
+    }
+
+    // 2️⃣ Local image (from /public/prod/)
+    return `/prod/${productImg}`;
+  };
+
   const handleOpenDetails = (product: Product) => {
     if (product.stock_level > 0) {
       setSelectedProduct(product);
@@ -315,7 +328,7 @@ export default function SearchProducts() {
                   onClick={() => handleOpenDetails(product)}
                 >
                   <Image
-                    src={`/prod/${product.product_img}`}
+                    src={getProductImageUrl(product.product_img)}
                     alt={product.product_name}
                     fill
                     className={`object-cover w-full h-full transition-transform duration-300 ${
@@ -381,7 +394,7 @@ export default function SearchProducts() {
                       </p>
                     </div>
 
-                    {/* Add to Cart (hidden when out of stock) */}
+                    {/* Add to Cart */}
                     {product.stock_level > 0 && (
                       <motion.button
                         className={`btn ${

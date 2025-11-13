@@ -189,13 +189,13 @@ export default function OrdersHistory() {
 
                 {/* Total, Payment Method & Status */}
                 <div className="flex flex-col items-start md:items-end gap-2">
-                  <div className="badge badge-primary badge-lg">
+                  <div className="badge badge-primary badge-lg p-4">
                     ₱{order.total.toFixed(2)}
                   </div>
 
                   {/* Status Badge */}
                   <div
-                    className={`badge text-xs ${
+                    className={`badge text-xs p-4 ${
                       order.status === "pending"
                         ? "badge-warning"
                         : order.status === "processing"
