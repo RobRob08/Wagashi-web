@@ -70,10 +70,13 @@ export default function AdminFeedbackDashboard() {
 
   return (
     <div className="max-w-5xl mx-auto py-10">
-      <h1 className="text-2xl font-bold mb-6">Feedback Dashboard</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Feedback Management</h1>
+
         <Link href="/admin" className="btn btn-outline">
           ← Back
         </Link>
+      </div>
       {loading && <p>Loading feedbacks...</p>}
       {error && <p className="text-error">{error}</p>}
 

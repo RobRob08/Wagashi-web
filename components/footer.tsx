@@ -45,8 +45,8 @@ export function Footer() {
 
     const { error: insertError } = await supabase.from("feedback").insert([
       {
-        user_id: user?.id || null,
-        name,
+        user_id: user?.id || null, // If user is not authenticated, user_id is null
+        name: name || user?.user_metadata?.full_name || "Anonymous", // Fallback to "Anonymous" if name is empty
         email,
         message,
       },
@@ -59,8 +59,8 @@ export function Footer() {
       setError("Failed to send feedback. Please try again.");
     } else {
       setSubmitted(true);
-      setMessage("");
-      setName(user?.user_metadata?.full_name || "");
+      setMessage(""); // Clear the feedback message after successful submission
+      setName(user?.user_metadata?.full_name || ""); // Clear the name field if user is authenticated
     }
   };
 
