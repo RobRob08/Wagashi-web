@@ -67,14 +67,28 @@ interface SupabaseOrder {
   user_id: string;
 }
 
+// Payment method display helper
+function getPaymentMethodDisplay(method: string): string {
+  const methods: { [key: string]: string } = {
+    cash: "Cash on Delivery",
+    card: "Credit/Debit Card", 
+    gcash: "GCash",
+    grabpay: "GrabPay"
+  };
+  return methods[method] || method;
+}
+
 export default function ReceiptPage() {
   const searchParams = useSearchParams();
   const [orderData, setOrderData] = useState<OrderData | null>(null);
   const [error, setError] = useState<string>("");
+  const [isLoadingItems, setIsLoadingItems] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const fetchOrder = async () => {
       try {
+        setIsLoadingItems(true);
         const { data: userData } = await supabase.auth.getUser();
         const user = userData?.user;
 
@@ -86,7 +100,7 @@ export default function ReceiptPage() {
         // Fetch from Supabase
         if (orderNumber && user) {
           const { data, error } = await supabase
-            .from<SupabaseOrder>("orders")
+            .from("orders")
             .select("*")
             .eq("order_number", orderNumber)
             .eq("user_id", user.id)
@@ -96,7 +110,7 @@ export default function ReceiptPage() {
 
           if (order) {
             const { data: itemsData, error: itemsError } = await supabase
-              .from<OrderItem>("order_items")
+              .from("order_items")
               .select("*")
               .eq("order_id", order.id);
 
@@ -108,9 +122,23 @@ export default function ReceiptPage() {
         if (!order) {
           const stored = localStorage.getItem("lastOrder");
           if (stored) {
-            const parsed = JSON.parse(stored) as SupabaseOrder & { items?: OrderItem[] };
-            order = parsed;
-            items = parsed.items ?? [];
+            try {
+              const parsed = JSON.parse(stored) as SupabaseOrder & { items?: OrderItem[] };
+              
+              // Validate required fields
+              if (!parsed.order_number || !parsed.customer_name) {
+                console.error("Invalid order data in localStorage");
+                setError("Order data is incomplete.");
+                return;
+              }
+              
+              order = parsed;
+              items = parsed.items ?? [];
+            } catch (parseError) {
+              console.error("Error parsing localStorage data:", parseError);
+              setError("Failed to load order data.");
+              return;
+            }
           } else {
             setError("Order not found.");
             return;
@@ -122,7 +150,13 @@ export default function ReceiptPage() {
           setOrderData({
             id: order.id,
             orderNumber: order.order_number,
-            date: new Date(order.created_at).toLocaleString(),
+            date: new Date(order.created_at).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            }),
             customerInfo: {
               name: order.customer_name,
               email: order.customer_email,
@@ -140,39 +174,64 @@ export default function ReceiptPage() {
         console.error("Receipt error:", err);
         const stored = localStorage.getItem("lastOrder");
         if (stored) {
-          const parsed = JSON.parse(stored) as SupabaseOrder & { items?: OrderItem[] };
-          setOrderData({
-            id: parsed.id,
-            orderNumber: parsed.order_number,
-            date: new Date(parsed.created_at).toLocaleString(),
-            customerInfo: {
-              name: parsed.customer_name,
-              email: parsed.customer_email,
-              phone: parsed.customer_phone ?? "",
-              address: parsed.customer_address ?? "",
-            },
-            paymentMethod: parsed.payment_method,
-            items: parsed.items ?? [],
-            subtotal: Number(parsed.subtotal),
-            shipping: Number(parsed.shipping),
-            total: Number(parsed.total),
-          });
+          try {
+            const parsed = JSON.parse(stored) as SupabaseOrder & { items?: OrderItem[] };
+            setOrderData({
+              id: parsed.id,
+              orderNumber: parsed.order_number,
+              date: new Date(parsed.created_at).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }),
+              customerInfo: {
+                name: parsed.customer_name,
+                email: parsed.customer_email,
+                phone: parsed.customer_phone ?? "",
+                address: parsed.customer_address ?? "",
+              },
+              paymentMethod: parsed.payment_method,
+              items: parsed.items ?? [],
+              subtotal: Number(parsed.subtotal),
+              shipping: Number(parsed.shipping),
+              total: Number(parsed.total),
+            });
+          } catch (parseError) {
+            setError("Something went wrong fetching your receipt.");
+          }
         } else {
           setError("Something went wrong fetching your receipt.");
         }
+      } finally {
+        setIsLoadingItems(false);
       }
     };
 
     fetchOrder();
-  }, [searchParams]);
+  }, [searchParams, retryCount]);
 
   if (error) {
     return (
       <div className="text-center py-20">
-        <p className="text-lg text-error">{error}</p>
-        <Link href="/orders" className="btn btn-primary mt-6">
-          Back to Orders
-        </Link>
+        <p className="text-lg text-error mb-4">{error}</p>
+        <div className="space-x-4">
+          <Link href="/orders" className="btn btn-primary">
+            Back to Orders
+          </Link>
+          {retryCount < 3 && (
+            <button 
+              className="btn btn-outline"
+              onClick={() => {
+                setError("");
+                setRetryCount(prev => prev + 1);
+              }}
+            >
+              Try Again
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -193,7 +252,10 @@ export default function ReceiptPage() {
           <Navbar />
           <div className="flex justify-center w-full px-4 py-8">
             <div className="w-full max-w-4xl space-y-6">
-              <OrderReceiptContent orderData={orderData} />
+              <OrderReceiptContent 
+                orderData={orderData} 
+                isLoadingItems={isLoadingItems}
+              />
             </div>
           </div>
         </div>
@@ -202,12 +264,92 @@ export default function ReceiptPage() {
   );
 }
 
-function OrderReceiptContent({ orderData }: { orderData: OrderData }) {
+function OrderReceiptContent({ 
+  orderData, 
+  isLoadingItems 
+}: { 
+  orderData: OrderData;
+  isLoadingItems: boolean;
+}) {
   const handlePrint = () => window.print();
-  const handleDownload = () => alert("PDF download coming soon!");
+  
+  const handleDownload = () => {
+    // Simple PDF download simulation
+    const receiptContent = document.getElementById('receipt-content');
+    if (receiptContent) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Receipt #${orderData.orderNumber}</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .header { text-align: center; margin-bottom: 30px; }
+                .section { margin-bottom: 20px; }
+                table { width: 100%; border-collapse: collapse; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+                .total { font-weight: bold; font-size: 1.2em; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h1>Wagashi</h1>
+                <p>Traditional Japanese Confections</p>
+                <h2>Order Confirmation</h2>
+              </div>
+              <div class="section">
+                <p><strong>Order Number:</strong> #${orderData.orderNumber}</p>
+                <p><strong>Date:</strong> ${orderData.date}</p>
+              </div>
+              <div class="section">
+                <h3>Customer Information</h3>
+                <p><strong>Name:</strong> ${orderData.customerInfo.name}</p>
+                <p><strong>Email:</strong> ${orderData.customerInfo.email}</p>
+                <p><strong>Phone:</strong> ${orderData.customerInfo.phone}</p>
+                <p><strong>Address:</strong> ${orderData.customerInfo.address}</p>
+                <p><strong>Payment Method:</strong> ${getPaymentMethodDisplay(orderData.paymentMethod)}</p>
+              </div>
+              <div class="section">
+                <h3>Order Items</h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th>Qty</th>
+                      <th>Price</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${orderData.items.map(item => `
+                      <tr>
+                        <td>${item.product_name}</td>
+                        <td>${item.quantity}</td>
+                        <td>₱${item.product_price.toFixed(2)}</td>
+                        <td>₱${(item.product_price * item.quantity).toFixed(2)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+              <div class="section">
+                <p><strong>Subtotal:</strong> ₱${orderData.subtotal.toFixed(2)}</p>
+                <p><strong>Shipping:</strong> ${orderData.shipping === 0 ? 'FREE' : `₱${orderData.shipping.toFixed(2)}`}</p>
+                <p class="total"><strong>Total:</strong> ₱${orderData.total.toFixed(2)}</p>
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" id="receipt-content">
       {/* Header */}
       <div className="card bg-base-100 shadow-lg text-center">
         <div className="card-body">
@@ -258,7 +400,7 @@ function OrderReceiptContent({ orderData }: { orderData: OrderData }) {
               <p className="text-sm">{orderData.customerInfo.address}</p>
               <p className="flex items-center gap-2 text-sm mt-2">
                 <CreditCard className="h-4 w-4" />
-                <span className="capitalize">{orderData.paymentMethod}</span>
+                <span>{getPaymentMethodDisplay(orderData.paymentMethod)}</span>
               </p>
             </div>
           </div>
@@ -277,35 +419,50 @@ function OrderReceiptContent({ orderData }: { orderData: OrderData }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {orderData.items.map((item, index) => (
-                    <tr key={item.id ?? `${item.product_id}-${index}`}>
-                      <td>
-                        <div className="flex items-center gap-3">
-                          {item.product_img && (
-                            <div className="relative w-12 h-12 rounded-lg overflow-hidden">
-                              <Image
-                                src={`/prod/${item.product_img}`}
-                                alt={item.product_name}
-                                fill
-                                className="object-cover"
-                              />
-                            </div>
-                          )}
-                          <div>
-                            <p className="font-medium">{item.product_name}</p>
-                            <p className={`${yuji.className} text-xs text-base-content/60`}>
-                              {item.product_jp}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="text-center">{item.quantity ?? 0}</td>
-                      <td className="text-right">₱{(item.product_price ?? 0).toFixed(2)}</td>
-                      <td className="text-right font-semibold">
-                        ₱{((item.product_price ?? 0) * (item.quantity ?? 0)).toFixed(2)}
+                  {isLoadingItems ? (
+                    <tr>
+                      <td colSpan={4} className="text-center py-8">
+                        <span className="loading loading-spinner loading-sm"></span>
+                        <span className="ml-2">Loading items...</span>
                       </td>
                     </tr>
-                  ))}
+                  ) : orderData.items.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="text-center py-8 text-base-content/60">
+                        No items found in this order.
+                      </td>
+                    </tr>
+                  ) : (
+                    orderData.items.map((item, index) => (
+                      <tr key={item.id ?? `${item.product_id}-${index}`}>
+                        <td>
+                          <div className="flex items-center gap-3">
+                            {item.product_img && (
+                              <div className="relative w-12 h-12 rounded-lg overflow-hidden">
+                                <Image
+                                  src={`/prod/${item.product_img}`}
+                                  alt={item.product_name}
+                                  fill
+                                  className="object-cover"
+                                />
+                              </div>
+                            )}
+                            <div>
+                              <p className="font-medium">{item.product_name}</p>
+                              <p className={`${yuji.className} text-xs text-base-content/60`}>
+                                {item.product_jp}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="text-center">{item.quantity ?? 0}</td>
+                        <td className="text-right">₱{(item.product_price ?? 0).toFixed(2)}</td>
+                        <td className="text-right font-semibold">
+                          ₱{((item.product_price ?? 0) * (item.quantity ?? 0)).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

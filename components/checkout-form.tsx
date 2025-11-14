@@ -279,8 +279,25 @@ export default function CheckoutForm() {
           .eq("id", user.id);
       }
 
-      // Save for receipt
-      localStorage.setItem("lastOrder", JSON.stringify(orderData));
+      // Save for receipt - include the order id for database reference
+     // Save for receipt - match the SupabaseOrder interface structure
+const receiptData = {
+  id: order.id,
+  order_number: orderData.orderNumber,
+  created_at: orderData.date,
+  customer_name: orderData.customerInfo.name,
+  customer_email: orderData.customerInfo.email,
+  customer_phone: orderData.customerInfo.phone,
+  customer_address: orderData.customerInfo.address,
+  payment_method: orderData.paymentMethod,
+  subtotal: orderData.subtotal,
+  shipping: orderData.shipping,
+  total: orderData.total,
+  user_id: user?.id || null,
+  items: checkoutItems, // Include items array
+};
+
+localStorage.setItem("lastOrder", JSON.stringify(receiptData));
 
       // Clear the checkout items from localStorage after successful order
       localStorage.removeItem("checkout_items");
@@ -363,7 +380,7 @@ export default function CheckoutForm() {
           You will receive a confirmation email shortly
         </p>
         <p className="text-sm text-base-content/40">
-          Redirecting to home page...
+          Redirecting to receipt...
         </p>
       </div>
     );
