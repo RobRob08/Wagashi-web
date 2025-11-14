@@ -198,7 +198,7 @@ export default function ReceiptPage() {
               shipping: Number(parsed.shipping),
               total: Number(parsed.total),
             });
-          } catch (parseError) {
+          } catch {
             setError("Something went wrong fetching your receipt.");
           }
         } else {
