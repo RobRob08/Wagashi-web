@@ -12,12 +12,24 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client"; 
+import { createClient } from "@/lib/supabase/client";
+import { loadStripe } from "@stripe/stripe-js";
+import {
+  Elements,
+  CardElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
+import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+import type { OnApproveData } from "@paypal/paypal-js";
 
 const yuji = Yuji_Boku({
   weight: "400",
   subsets: ["latin"],
 });
+
+// Initialize Stripe
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 // Define the cart item type
 interface CartItem {
@@ -44,6 +56,263 @@ interface UserProfile {
   updated_at: string;
 }
 
+// Form data type
+interface FormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  postalCode: string;
+  paymentMethod: string;
+  cardNumber: string;
+  cardName: string;
+  cardExpiry: string;
+  cardCVV: string;
+}
+
+// Stripe Card Element styling
+const CARD_ELEMENT_OPTIONS = {
+  style: {
+    base: {
+      fontSize: "16px",
+      color: "#424770",
+      "::placeholder": {
+        color: "#aab7c4",
+      },
+    },
+    invalid: {
+      color: "#9e2146",
+    },
+  },
+};
+
+// Stripe Payment Form Component
+function StripePaymentForm({
+  onSuccess,
+  onError,
+  total,
+  formData,
+  checkoutItems,
+}: {
+  onSuccess: () => void;
+  onError: (error: string) => void;
+  total: number;
+  formData: FormData;
+  checkoutItems: CartItem[];
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleStripeSubmit = async () => {
+    if (!stripe || !elements) return;
+
+    setIsProcessing(true);
+    onError("");
+
+    try {
+      const cardElement = elements.getElement(CardElement);
+      if (!cardElement) throw new Error("Card element not found");
+
+      // Create payment intent
+      const response = await fetch("/api/stripe/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: Math.round(total * 100), // Convert to cents
+          currency: "php",
+          description: `Order for ${formData.firstName} ${formData.lastName}`,
+        }),
+      });
+
+      const { clientSecret, error: intentError } = await response.json();
+      if (intentError) throw new Error(intentError);
+
+      // Confirm payment
+      const { error: stripeError, paymentIntent } =
+        await stripe.confirmCardPayment(clientSecret, {
+          payment_method: {
+            card: cardElement,
+            billing_details: {
+              name: `${formData.firstName} ${formData.lastName}`,
+              email: formData.email,
+              phone: formData.phone,
+              address: {
+                line1: formData.address,
+                city: formData.city,
+                postal_code: formData.postalCode,
+              },
+            },
+          },
+        });
+
+      if (stripeError) throw new Error(stripeError.message);
+
+      if (paymentIntent?.status === "succeeded") {
+        // Save order to database
+        await saveOrderToDatabase(
+          formData,
+          checkoutItems,
+          total,
+          "stripe",
+          paymentIntent.id
+        );
+        onSuccess();
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Stripe payment failed";
+      onError(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="p-4 border border-base-300 rounded-lg bg-base-200">
+        <CardElement options={CARD_ELEMENT_OPTIONS} />
+      </div>
+      <button
+        type="button"
+        onClick={handleStripeSubmit}
+        disabled={!stripe || isProcessing}
+        className="btn btn-primary w-full"
+      >
+        {isProcessing ? (
+          <>
+            <span className="loading loading-spinner"></span>
+            Processing...
+          </>
+        ) : (
+          `Pay ₱${total.toFixed(2)} with Stripe`
+        )}
+      </button>
+    </div>
+  );
+}
+
+// Helper function to save order
+async function saveOrderToDatabase(
+  formData: FormData,
+  checkoutItems: CartItem[],
+  total: number,
+  paymentMethod: string,
+  paymentId?: string
+): Promise<string> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const subtotal = checkoutItems.reduce(
+    (sum, item) => sum + item.product_price * item.quantity,
+    0
+  );
+  const shipping = subtotal > 1000 ? 0 : 100;
+
+  const orderData = {
+    orderNumber: `WG${Date.now().toString().slice(-8)}`,
+    date: new Date().toISOString(),
+    customerInfo: {
+      name: `${formData.firstName} ${formData.lastName}`,
+      email: formData.email,
+      phone: formData.phone,
+      address: `${formData.address}, ${formData.city}, ${formData.postalCode}`,
+    },
+    paymentMethod,
+    paymentId: paymentId || null,
+    items: checkoutItems,
+    subtotal,
+    shipping,
+    total,
+  };
+
+  // Insert main order
+  // Insert main order
+const { data: order, error: orderError } = await supabase
+  .from("orders")
+  .insert([
+    {
+      user_id: user?.id || null,
+      order_number: orderData.orderNumber,
+      date: orderData.date,
+      customer_name: orderData.customerInfo.name,
+      customer_email: orderData.customerInfo.email,
+      customer_phone: orderData.customerInfo.phone,
+      customer_address: orderData.customerInfo.address,
+      payment_method: orderData.paymentMethod,
+      payment_id: orderData.paymentId,
+      subtotal: orderData.subtotal,
+      shipping: orderData.shipping,
+      total: orderData.total,
+    },
+  ])
+  .select()
+  .single();
+
+if (orderError) {
+  console.error("Order insert error:", orderError);
+  throw new Error("Failed to save order");
+}
+
+// Insert order items
+const orderItems = checkoutItems.map((item) => ({
+  order_id: order.id,
+  product_id: Number(item.product_id), // ensure number
+  product_name: item.product_name,
+  product_jp: item.product_jp,
+  product_price: item.product_price,
+  product_img: item.product_img,
+  quantity: item.quantity,
+}));
+
+const { error: itemsError } = await supabase
+  .from("order_items")
+  .insert(orderItems);
+
+if (itemsError) {
+  console.error("Order items insert error:", itemsError);
+  throw new Error("Failed to save order items");
+}
+
+  // Update user profile
+  if (user) {
+    await supabase
+      .from("user_profiles")
+      .update({
+        full_name: `${formData.firstName} ${formData.lastName}`,
+        phone: formData.phone,
+        address: formData.address,
+        city: formData.city,
+        postal_code: formData.postalCode,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id);
+  }
+
+  // Save receipt data
+  const receiptData = {
+    id: order.id,
+    order_number: orderData.orderNumber,
+    created_at: orderData.date,
+    customer_name: orderData.customerInfo.name,
+    customer_email: orderData.customerInfo.email,
+    customer_phone: orderData.customerInfo.phone,
+    customer_address: orderData.customerInfo.address,
+    payment_method: orderData.paymentMethod,
+    subtotal: orderData.subtotal,
+    shipping: orderData.shipping,
+    total: orderData.total,
+    user_id: user?.id || null,
+    items: checkoutItems,
+  };
+
+  localStorage.setItem("lastOrder", JSON.stringify(receiptData));
+  localStorage.removeItem("checkout_items");
+
+  return order.id;
+}
+
 export default function CheckoutForm() {
   const { clearCart } = useCart();
   const router = useRouter();
@@ -55,7 +324,7 @@ export default function CheckoutForm() {
   const [isLoading, setIsLoading] = useState(true);
 
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     firstName: "",
     lastName: "",
     email: "",
@@ -77,11 +346,9 @@ export default function CheckoutForm() {
       const supabase = createClient();
 
       try {
-        // Get current user
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user) {
-          // Fetch user profile from user_profiles table
           const { data: profile, error: profileError } = await supabase
             .from("user_profiles")
             .select("*")
@@ -93,7 +360,6 @@ export default function CheckoutForm() {
           } else if (profile) {
             setUserProfile(profile);
             
-            // Parse full name into first and last name
             let firstName = "";
             let lastName = "";
             if (profile.full_name) {
@@ -102,7 +368,6 @@ export default function CheckoutForm() {
               lastName = nameParts.slice(1).join(" ") || "";
             }
 
-            // Auto-fill form with user profile data
             setFormData(prev => ({
               ...prev,
               firstName,
@@ -116,11 +381,10 @@ export default function CheckoutForm() {
           }
         }
 
-        // Load selected items from localStorage
         const storedItems = localStorage.getItem("checkout_items");
         if (storedItems) {
           try {
-            const parsedItems = JSON.parse(storedItems);
+            const parsedItems = JSON.parse(storedItems) as CartItem[];
             setCheckoutItems(parsedItems);
           } catch (error) {
             console.error("Error parsing checkout items:", error);
@@ -140,7 +404,6 @@ export default function CheckoutForm() {
     loadUserDataAndCartItems();
   }, []);
 
-  // Use checkoutItems for calculations
   const subtotal = checkoutItems.reduce(
     (sum, item) => sum + item.product_price * item.quantity,
     0
@@ -158,7 +421,83 @@ export default function CheckoutForm() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // 🧾 Submit handler
+  const handlePaymentSuccess = () => {
+    setIsProcessing(false);
+    setOrderComplete(true);
+    clearCart();
+
+    setTimeout(() => {
+      router.push("/checkout/success");
+    }, 2000);
+  };
+
+  const handlePaymentError = (errorMsg: string) => {
+    setError(errorMsg);
+    setIsProcessing(false);
+  };
+
+  // PayPal handlers
+// PayPal handlers
+const createPayPalOrder = async (): Promise<string> => {
+  try {
+    // Ensure amount has two decimals as string
+    const formattedAmount = total.toFixed(2);
+
+    const response = await fetch("/api/paypal/create-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: formattedAmount,
+        currency: "PHP",
+        description: `Order for ${formData.firstName} ${formData.lastName}`,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to create PayPal order");
+    }
+
+    if (!data.id) {
+      throw new Error("PayPal order ID not returned");
+    }
+
+    return data.id;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "PayPal order creation failed";
+    console.error("PayPal create order error:", msg);
+    throw new Error(msg);
+  }
+};
+
+const onPayPalApprove = async (data: OnApproveData) => {
+  try {
+    setIsProcessing(true);
+
+    const response = await fetch("/api/paypal/capture-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderID: data.orderID }),
+    });
+
+    const captureData = await response.json();
+
+    if (!response.ok || captureData.error) {
+      throw new Error(captureData.error || "Failed to capture PayPal payment");
+    }
+
+    // Save order in your database
+    await saveOrderToDatabase(formData, checkoutItems, total, "paypal", data.orderID);
+    handlePaymentSuccess();
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "PayPal payment failed";
+    handlePaymentError(errorMessage);
+  }
+};
+
+
+  // Original payment handler for non-Stripe/PayPal methods
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -168,12 +507,16 @@ export default function CheckoutForm() {
       return;
     }
 
+    // Skip for Stripe and PayPal as they have their own handlers
+    if (formData.paymentMethod === "stripe" || formData.paymentMethod === "paypal") {
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
       const orderDescription = `Order for ${formData.firstName} ${formData.lastName}`;
 
-      // Card details if needed
       let cardDetails = null;
       if (formData.paymentMethod === "card") {
         const [expMonth, expYear] = formData.cardExpiry.split("/");
@@ -187,7 +530,6 @@ export default function CheckoutForm() {
         };
       }
 
-      // PayMongo API
       const response = await fetch("/api/paymongo/create-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -202,107 +544,13 @@ export default function CheckoutForm() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Payment failed");
 
-      // Supabase integration
-      const supabase = createClient();
-
-      // Get logged-in user
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const orderData = {
-        orderNumber: `WG${Date.now().toString().slice(-8)}`,
-        date: new Date().toISOString(),
-        customerInfo: {
-          name: `${formData.firstName} ${formData.lastName}`,
-          email: formData.email,
-          phone: formData.phone,
-          address: `${formData.address}, ${formData.city}, ${formData.postalCode}`,
-        },
-        paymentMethod: formData.paymentMethod,
-        items: checkoutItems,
-        subtotal,
-        shipping,
+      await saveOrderToDatabase(
+        formData,
+        checkoutItems,
         total,
-      };
+        formData.paymentMethod
+      );
 
-      // Insert main order
-      const { data: order, error: orderError } = await supabase
-        .from("orders")
-        .insert([
-          {
-            user_id: user?.id || null,
-            order_number: orderData.orderNumber,
-            date: orderData.date,
-            customer_name: orderData.customerInfo.name,
-            customer_email: orderData.customerInfo.email,
-            customer_phone: orderData.customerInfo.phone,
-            customer_address: orderData.customerInfo.address,
-            payment_method: orderData.paymentMethod,
-            subtotal: orderData.subtotal,
-            shipping: orderData.shipping,
-            total: orderData.total,
-          },
-        ])
-        .select()
-        .single();
-
-      if (orderError) throw new Error("Failed to save order");
-
-      // Insert order items
-      const orderItems = checkoutItems.map((item) => ({
-        order_id: order.id,
-        product_id: item.product_id,
-        product_name: item.product_name,
-        product_jp: item.product_jp,
-        product_price: item.product_price,
-        product_img: item.product_img,
-        quantity: item.quantity,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from("order_items")
-        .insert(orderItems);
-
-      if (itemsError) throw new Error("Failed to save order items");
-
-      // Optionally update user profile with latest information
-      if (user) {
-        await supabase
-          .from("user_profiles")
-          .update({
-            full_name: `${formData.firstName} ${formData.lastName}`,
-            phone: formData.phone,
-            address: formData.address,
-            city: formData.city,
-            postal_code: formData.postalCode,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", user.id);
-      }
-
-      // Save for receipt - include the order id for database reference
-     // Save for receipt - match the SupabaseOrder interface structure
-const receiptData = {
-  id: order.id,
-  order_number: orderData.orderNumber,
-  created_at: orderData.date,
-  customer_name: orderData.customerInfo.name,
-  customer_email: orderData.customerInfo.email,
-  customer_phone: orderData.customerInfo.phone,
-  customer_address: orderData.customerInfo.address,
-  payment_method: orderData.paymentMethod,
-  subtotal: orderData.subtotal,
-  shipping: orderData.shipping,
-  total: orderData.total,
-  user_id: user?.id || null,
-  items: checkoutItems, // Include items array
-};
-
-localStorage.setItem("lastOrder", JSON.stringify(receiptData));
-
-      // Clear the checkout items from localStorage after successful order
-      localStorage.removeItem("checkout_items");
-
-      // Redirects for GCash / GrabPay
       if (
         formData.paymentMethod === "gcash" ||
         formData.paymentMethod === "grabpay"
@@ -313,26 +561,17 @@ localStorage.setItem("lastOrder", JSON.stringify(receiptData));
         }
       }
 
-      // Success flow
-      setIsProcessing(false);
-      setOrderComplete(true);
-      clearCart();
-
-      setTimeout(() => {
-        router.push("/checkout/success");
-      }, 2000);
-    } catch (err: unknown) {
-      setIsProcessing(false);
+      handlePaymentSuccess();
+    } catch (err) {
       const msg =
         err instanceof Error
           ? err.message
           : "Payment processing failed. Please try again.";
-      setError(msg);
+      handlePaymentError(msg);
       console.error("Checkout error:", err);
     }
   };
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-20">
@@ -342,7 +581,6 @@ localStorage.setItem("lastOrder", JSON.stringify(receiptData));
     );
   }
 
-  // Empty cart
   if (checkoutItems.length === 0 && !orderComplete) {
     return (
       <div className="text-center py-20">
@@ -367,7 +605,6 @@ localStorage.setItem("lastOrder", JSON.stringify(receiptData));
     );
   }
 
-  // Success screen
   if (orderComplete) {
     return (
       <div className="text-center py-20">
@@ -390,19 +627,13 @@ localStorage.setItem("lastOrder", JSON.stringify(receiptData));
     <div className="w-full">
       <div className="flex justify-between items-center mb-2">
         <h1 className="text-4xl font-bold">Checkout</h1>
-        {userProfile && (
-          <div>
-          </div>
-        )}
       </div>
       <p className="text-base-content/60 mb-8">
         Complete your order ({checkoutItems.length} selected items)
-        {userProfile && ""}
       </p>
 
       <form onSubmit={handleSubmit}>
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left Column */}
           <div className="lg:col-span-2 space-y-6">
             {/* Customer Info */}
             <div className="card bg-base-100 shadow-md">
@@ -540,8 +771,8 @@ localStorage.setItem("lastOrder", JSON.stringify(receiptData));
                   Payment Method
                 </h2>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    {["cash", "card", "gcash", "grabpay"].map((method) => (
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                    {["cash", "card", "stripe", "paypal", "gcash", "grabpay"].map((method) => (
                       <label
                         key={method}
                         className="flex items-center gap-2 cursor-pointer p-3 border rounded-lg hover:border-primary transition-colors"
@@ -554,20 +785,24 @@ localStorage.setItem("lastOrder", JSON.stringify(receiptData));
                           onChange={handleInputChange}
                           className="radio radio-primary"
                         />
-                        <span className="capitalize">
+                        <span className="capitalize text-sm">
                           {method === "cash"
                             ? "Cash on Delivery"
+                            : method === "card"
+                            ? "PayMongo Card"
+                            : method === "stripe"
+                            ? "Stripe"
+                            : method === "paypal"
+                            ? "PayPal"
                             : method === "gcash"
                             ? "GCash"
-                            : method === "grabpay"
-                            ? "GrabPay"
-                            : "Credit/Debit Card"}
+                            : "GrabPay"}
                         </span>
                       </label>
                     ))}
                   </div>
 
-                  {/* Card Fields */}
+                  {/* PayMongo Card Fields */}
                   {formData.paymentMethod === "card" && (
                     <div className="space-y-4 pt-4 border-t">
                       <input
@@ -609,6 +844,43 @@ localStorage.setItem("lastOrder", JSON.stringify(receiptData));
                           required
                         />
                       </div>
+                    </div>
+                  )}
+
+                  {/* Stripe Payment */}
+                  {formData.paymentMethod === "stripe" && (
+                    <div className="pt-4 border-t">
+                      <Elements stripe={stripePromise}>
+                        <StripePaymentForm
+                          onSuccess={handlePaymentSuccess}
+                          onError={handlePaymentError}
+                          total={total}
+                          formData={formData}
+                          checkoutItems={checkoutItems}
+                        />
+                      </Elements>
+                    </div>
+                  )}
+
+                  {/* PayPal Payment */}
+                  {formData.paymentMethod === "paypal" && (
+                    <div className="pt-4 border-t">
+                      <PayPalScriptProvider
+                        options={{
+                          clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID!,
+                          currency: "PHP",
+                        }}
+                      >
+                        <PayPalButtons
+                          createOrder={createPayPalOrder}
+                          onApprove={onPayPalApprove}
+                          onError={(err) => {
+                            handlePaymentError("PayPal payment failed");
+                            console.error(err);
+                          }}
+                          style={{ layout: "vertical" }}
+                        />
+                      </PayPalScriptProvider>
                     </div>
                   )}
                 </div>
@@ -703,20 +975,23 @@ localStorage.setItem("lastOrder", JSON.stringify(receiptData));
                   </div>
                 )}
 
-                <button
-                  type="submit"
-                  className="btn btn-primary btn-lg w-full mt-6"
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? (
-                    <>
-                      <span className="loading loading-spinner"></span>
-                      Processing...
-                    </>
-                  ) : (
-                    `Place Order - ₱${total.toFixed(2)}`
-                  )}
-                </button>
+                {formData.paymentMethod !== "stripe" && 
+                 formData.paymentMethod !== "paypal" && (
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-lg w-full mt-6"
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <span className="loading loading-spinner"></span>
+                        Processing...
+                      </>
+                    ) : (
+                      `Place Order - ₱${total.toFixed(2)}`
+                    )}
+                  </button>
+                )}
 
                 <p className="text-xs text-center text-base-content/40 mt-2">
                   By placing your order, you agree to our terms and conditions

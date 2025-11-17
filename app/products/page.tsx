@@ -1,4 +1,5 @@
 
+import AIChatbot from "@/components/ai-chatbot";
 import Navbar from "@/components/navbar";
 import ProductCard from "@/components/productCard";
 
@@ -12,6 +13,7 @@ export default function Home() {
         <div className="flex justify-center min-h-screen w-full px-4 py-6 overflow-x-hidden">
           <div className="w-full max-w-7xl">
             <ProductCard/>
+            <AIChatbot/>
           </div>
         </div>
       </div>

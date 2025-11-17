@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import jsPDF from "jspdf";
 
 const supabase = createClient();
 
@@ -13,7 +14,7 @@ interface Order {
   customer_email: string;
   created_at: string;
   total: number;
-  status: string; // added status
+  status: string;
 }
 
 const statuses = ["pending", "processing", "shipped", "delivered", "cancelled"];
@@ -56,17 +57,38 @@ export default function AdminOrdersPage() {
     }
   };
 
+  // PDF generator
+  const generatePDF = (order: Order) => {
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.text("Order Receipt", 105, 20, { align: "center" });
+
+    doc.setFontSize(12);
+    doc.text(`Order Number: ${order.order_number}`, 20, 40);
+    doc.text(`Customer Name: ${order.customer_name}`, 20, 50);
+    doc.text(`Email: ${order.customer_email}`, 20, 60);
+    doc.text(
+      `Date: ${new Date(order.created_at).toLocaleString()}`,
+      20,
+      70
+    );
+    doc.text(`Total: ₱${Number(order.total).toFixed(2)}`, 20, 80);
+    doc.text(`Status: ${order.status}`, 20, 90);
+
+    doc.save(`Receipt-${order.order_number}.pdf`);
+  };
+
   if (loading) return <p className="p-10 text-center">Loading orders...</p>;
 
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Admin Orders</h1>
-
         <Link href="/admin" className="btn btn-outline">
           ← Back
         </Link>
       </div>
+
       <table className="table w-full">
         <thead>
           <tr>
@@ -79,6 +101,7 @@ export default function AdminOrdersPage() {
             <th>Actions</th>
           </tr>
         </thead>
+
         <tbody>
           {orders.map((order) => (
             <tr key={order.id}>
@@ -100,7 +123,7 @@ export default function AdminOrdersPage() {
                   ))}
                 </select>
               </td>
-              <td>
+              <td className="flex gap-2">
                 <Link
                   href={`/admin/Orders/receipt?orderNumber=${order.order_number}`}
                   className="btn btn-sm btn-primary"
@@ -108,6 +131,12 @@ export default function AdminOrdersPage() {
                   View
                 </Link>
 
+                <button
+                  onClick={() => generatePDF(order)}
+                  className="btn btn-sm btn-secondary"
+                >
+                  PDF
+                </button>
               </td>
             </tr>
           ))}

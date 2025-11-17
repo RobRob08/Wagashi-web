@@ -65,7 +65,7 @@ export default function Navbar() {
     { href: "/admin/Orders", label: "Order Management" },
     { href: "/admin/Inventory", label: "Inventory Management" },
     { href: "/admin/feedback", label: "Customer Feedback" },
-    { href: "/admin/CMS", label: "CMS" },
+    { href: "/admin/Sales", label: "Sales" },
   ];
 
   const linksToRender = role === "admin" ? adminLinks : userLinks;

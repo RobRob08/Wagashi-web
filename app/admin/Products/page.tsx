@@ -12,7 +12,9 @@ type Product = {
   product_desc: string | null;
   product_category: string | null;
   product_subcategory: string | null;
-  product_jp: string;
+  product_jp: string | null;
+  stock_level?: number;
+  quantity_sold?: number;
 };
 
 export default function ProductManagementPage() {
@@ -25,6 +27,7 @@ export default function ProductManagementPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [nextProductId, setNextProductId] = useState<number | null>(null);
 
   // Load products with pagination
   useEffect(() => {
@@ -44,6 +47,23 @@ export default function ProductManagementPage() {
     fetchProducts();
   }, [page, supabase]);
 
+  // Fetch next Product ID for "Add Product" modal
+  useEffect(() => {
+    const fetchNextProductId = async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("product_id")
+        .order("product_id", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!error && data) setNextProductId(data.product_id + 1);
+      else setNextProductId(1);
+    };
+
+    fetchNextProductId();
+  }, [products]);
+
   const totalPages = Math.ceil(totalCount / pageSize);
 
   const handleOpenDetails = (product: Product | null) => {
@@ -57,6 +77,8 @@ export default function ProductManagementPage() {
         product_category: null,
         product_subcategory: null,
         product_jp: "",
+        stock_level: 0,
+        quantity_sold: 0,
       }
     );
     setIsModalOpen(true);
@@ -99,18 +121,46 @@ export default function ProductManagementPage() {
       // Insert new product
       const { error } = await supabase
         .from("products")
-        .insert([{ ...product, product_img: productImg }]);
+        .insert([
+          {
+            product_name: product.product_name,
+            product_price: product.product_price,
+            product_img: productImg ?? undefined,
+            product_desc: product.product_desc ?? undefined,
+            product_category: product.product_category ?? undefined,
+            product_subcategory: product.product_subcategory ?? undefined,
+            product_jp: product.product_jp ?? undefined,
+            stock_level: product.stock_level ?? 0,
+            quantity_sold: product.quantity_sold ?? 0,
+          },
+        ]);
+
       if (error) alert(`Error adding product: ${error.message}`);
       else {
         setPage(1);
         handleCloseModal();
       }
     } else {
-      // Update product
+      // Update existing product
+      const updateData: Partial<Product> & { product_img?: string } = {
+        product_name: product.product_name,
+        product_price: product.product_price,
+        product_desc: product.product_desc ?? undefined,
+        product_category: product.product_category ?? undefined,
+        product_subcategory: product.product_subcategory ?? undefined,
+        product_jp: product.product_jp ?? undefined,
+        stock_level: product.stock_level,
+        quantity_sold: product.quantity_sold,
+      };
+
+      // Only include product_img if a new image was uploaded
+      if (imageFile && productImg) updateData.product_img = productImg;
+
       const { error } = await supabase
         .from("products")
-        .update({ ...product, product_img: productImg })
+        .update(updateData)
         .eq("product_id", product.product_id);
+
       if (error) alert(`Error updating product: ${error.message}`);
       else {
         setPage(1);
@@ -128,11 +178,7 @@ export default function ProductManagementPage() {
   // Return correct image path
   const getImageUrl = (productImg: string | null) => {
     if (!productImg) return "/default-image.png";
-
-    // Already an external or GitHub image
     if (productImg.startsWith("http")) return productImg;
-
-    // Legacy local image (still works)
     return `/prod/${productImg}`;
   };
 
@@ -192,7 +238,11 @@ export default function ProductManagementPage() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-center mt-4 gap-2">
-          <button className="btn btn-outline" disabled={page === 1} onClick={() => setPage(page - 1)}>
+          <button
+            className="btn btn-outline"
+            disabled={page === 1}
+            onClick={() => setPage(page - 1)}
+          >
             Prev
           </button>
           {[...Array(totalPages)].map((_, i) => (
@@ -215,69 +265,88 @@ export default function ProductManagementPage() {
       )}
 
       {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex justify-center items-center z-50">
+      {isModalOpen && selectedProduct && (
+        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded-lg w-1/2">
             <h2 className="text-2xl font-bold mb-4">
-              {selectedProduct?.product_id ? "Edit Product" : "Add Product"}
+              {selectedProduct.product_id === 0 ? "Add Product" : "Edit Product"}
             </h2>
+
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                saveProduct(selectedProduct as Product);
+                saveProduct(selectedProduct);
               }}
             >
+              {/* Product ID */}
+              <div className="mb-3">
+                <label className="block text-sm font-medium mb-1">Product ID</label>
+                <input
+                  type="text"
+                  className="input input-bordered w-full"
+                  value={
+                    selectedProduct.product_id === 0
+                      ? nextProductId ?? ""
+                      : selectedProduct.product_id
+                  }
+                  readOnly
+                />
+              </div>
+
+              {/* Product Name */}
               <div className="mb-3">
                 <label className="block text-sm font-medium mb-1">Product Name</label>
                 <input
                   type="text"
                   className="input input-bordered w-full"
-                  value={selectedProduct?.product_name || ""}
+                  value={selectedProduct.product_name}
                   onChange={(e) =>
-                    setSelectedProduct({ ...selectedProduct!, product_name: e.target.value })
+                    setSelectedProduct({ ...selectedProduct, product_name: e.target.value })
                   }
                 />
               </div>
 
+              {/* Price */}
               <div className="mb-3">
                 <label className="block text-sm font-medium mb-1">Price</label>
                 <input
                   type="number"
                   className="input input-bordered w-full"
-                  value={selectedProduct?.product_price || ""}
+                  value={selectedProduct.product_price}
                   onChange={(e) =>
                     setSelectedProduct({
-                      ...selectedProduct!,
+                      ...selectedProduct,
                       product_price: Number(e.target.value),
                     })
                   }
                 />
               </div>
 
+              {/* Image Upload */}
               <div className="mb-3">
-                <label className="block text-sm font-medium mb-1">Upload Image</label>
+                <label className="block text-sm font-medium mb-1">Image</label>
                 <input
                   type="file"
                   accept="image/*"
                   className="file-input w-full"
                   onChange={(e) => setImageFile(e.target.files?.[0] || null)}
                 />
-                {selectedProduct?.product_img && (
+                {selectedProduct.product_img && (
                   <img
                     src={getImageUrl(selectedProduct.product_img)}
-                    alt="preview"
-                    className="w-24 h-24 object-cover mt-2"
+                    className="w-24 h-24 mt-2 object-cover"
                   />
                 )}
               </div>
 
+              {/* Description */}
               <div className="mb-3">
                 <label className="block text-sm font-medium mb-1">Description</label>
                 <textarea
                   className="textarea textarea-bordered w-full"
-                  value={selectedProduct?.product_desc || ""}
+                  value={selectedProduct.product_desc ?? ""}
                   onChange={(e) =>
-                    setSelectedProduct({ ...selectedProduct!, product_desc: e.target.value })
+                    setSelectedProduct({ ...selectedProduct, product_desc: e.target.value })
                   }
                 />
               </div>
