@@ -13,6 +13,7 @@ import {
   Package,
   Award,
 } from "lucide-react";
+import Link from "next/link";
 
 // Types
 interface Order {
@@ -368,6 +369,9 @@ export default function SalesAnalytics() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-4xl font-bold mb-2">Sales Analytics</h1>
+          <Link href="/admin" className="btn btn-outline">
+                    ← Back
+                  </Link>
           <p className="text-base-content/60">
             Comprehensive sales reports and performance metrics
           </p>
