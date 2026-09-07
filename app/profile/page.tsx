@@ -8,6 +8,7 @@ export default function ProfilePage() {
         <Navbar />
         <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12 w-full">
           <UserProfile />
+
         </div>
       </div>
     </main>
