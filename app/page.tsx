@@ -4,7 +4,6 @@ import { Footer } from "@/components/footer";
 import { Gallery } from "@/components/gallery";
 import { Category } from "@/components/category";
 import { About } from "@/components/about-us";
-import AIChatbot from "@/components/ai-chatbot";
 export default function Home() {
   
 
@@ -19,7 +18,6 @@ export default function Home() {
         <About/>
         <Gallery/>
         <Footer/>
-        <AIChatbot/>
       </div>
     </main>
   );
