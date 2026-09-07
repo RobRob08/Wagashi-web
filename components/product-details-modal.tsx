@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { X, ShoppingBag, Check } from "lucide-react";
 import { Yuji_Boku } from "next/font/google";
-import { useCart } from "@/app/context/cartcontext";
+import { useCart } from "@/components/providers/cart-context";
 import { motion } from "motion/react";
 import { useState, useEffect } from "react";
 

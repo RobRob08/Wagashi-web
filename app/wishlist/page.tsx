@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useWishlist, WishlistItem } from "@/app/context/wishlistcontext";
-import { useCart } from "@/app/context/cartcontext";
+import { useWishlist, WishlistItem } from "@/components/providers/wishlist-context";
+import { useCart } from "@/components/providers/cart-context";
 import { Yuji_Boku } from "next/font/google";
 import { Trash2, ShoppingBag, Heart } from "lucide-react";
 import { motion } from "motion/react";

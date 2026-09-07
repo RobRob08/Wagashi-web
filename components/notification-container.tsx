@@ -1,6 +1,6 @@
 "use client";
 
-import { useCart } from "@/app/context/cartcontext";
+import { useCart } from "@/components/providers/cart-context";
 import { Notification } from "./notification";
 
 export function NotificationContainer() {

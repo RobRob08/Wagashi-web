@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Yuji_Boku } from "next/font/google";
 import { ShoppingBag, Check, Heart } from "lucide-react";
-import { useCart } from "@/app/context/cartcontext";
-import { useWishlist } from "@/app/context/wishlistcontext";
+import { useCart } from "@/components/providers/cart-context";
+import { useWishlist } from "@/components/providers/wishlist-context";
 import { motion } from "motion/react";
 import ProductDetailsModal from "./product-details-modal";
 

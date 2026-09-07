@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Yuji_Boku } from "next/font/google";
 import { ShoppingBag, Check } from "lucide-react";
-import { useCart } from "@/app/context/cartcontext";
+import { useCart } from "@/components/providers/cart-context";
 import { motion } from "motion/react";
 import ProductDetailsModal from "./product-details-modal";
 

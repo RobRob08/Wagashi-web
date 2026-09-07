@@ -77,7 +77,7 @@ function AdminOrderReceiptContent() {
     return (
       <div className="p-10 text-center text-red-500">
         <p>{error}</p>
-        <Link href="/admin/Orders" className="btn btn-primary mt-6">
+        <Link href="/admin/orders" className="btn btn-primary mt-6">
           Back to Orders
         </Link>
       </div>
@@ -90,7 +90,7 @@ function AdminOrderReceiptContent() {
     <div className="max-w-5xl mx-auto p-8 space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Order Receipt</h1>
-        <Link href="/admin/Orders" className="btn btn-outline">
+        <Link href="/admin/orders" className="btn btn-outline">
           ← Back to Orders
         </Link>
       </div>

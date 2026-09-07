@@ -5,7 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { useCart } from "@/app/context/cartcontext";
+import { useCart } from "@/components/providers/cart-context";
 import Image from "next/image";
 import { Yuji_Boku } from "next/font/google";
 import { useState, useEffect } from "react";

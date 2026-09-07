@@ -9,7 +9,7 @@ import Cart from "./cart-modal";
 import { EnvVarWarning } from "@/components/env-var-warning";
 import { AuthButton } from "@/components/auth-button";
 import { createClient } from "@/lib/supabase/client";
-import { useWishlist } from "@/app/context/wishlistcontext";
+import { useWishlist } from "@/components/providers/wishlist-context";
 
 export default function Navbar() {
   const [role, setRole] = useState<string | null>(null);
@@ -60,12 +60,12 @@ export default function Navbar() {
   ];
 
   const adminLinks = [
-    { href: "/admin/Products", label: "Product Management" },
-    { href: "/admin/Users", label: "User Management" },
-    { href: "/admin/Orders", label: "Order Management" },
-    { href: "/admin/Inventory", label: "Inventory Management" },
+    { href: "/admin/products", label: "Product Management" },
+    { href: "/admin/users", label: "User Management" },
+    { href: "/admin/orders", label: "Order Management" },
+    { href: "/admin/inventory", label: "Inventory Management" },
     { href: "/admin/feedback", label: "Customer Feedback" },
-    { href: "/admin/Sales", label: "Sales" },
+    { href: "/admin/sales", label: "Sales" },
   ];
 
   const linksToRender = role === "admin" ? adminLinks : userLinks;

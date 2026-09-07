@@ -125,7 +125,7 @@ export default function AdminOrdersPage() {
               </td>
               <td className="flex gap-2">
                 <Link
-                  href={`/admin/Orders/receipt?orderNumber=${order.order_number}`}
+                  href={`/admin/orders/receipt?orderNumber=${order.order_number}`}
                   className="btn btn-sm btn-primary"
                 >
                   View

@@ -2,11 +2,11 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import { CartProvider } from "./context/cartcontext";
+import { CartProvider } from "@/components/providers/cart-context";
 import "./globals.css";
 import { DaisyThemeSync } from "@/components/daisyui-sync";
 import { NotificationContainer } from "@/components/notification-container";
-import { WishlistProvider } from "./context/wishlistcontext";
+import { WishlistProvider } from "@/components/providers/wishlist-context";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -39,11 +39,10 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <DaisyThemeSync />
-          {/* Wrap both CartProvider and WishlistProvider inside ThemeProvider */}
           <CartProvider>
             <WishlistProvider>
               <NotificationContainer />
-              {children} {/* Main content goes here */}
+              {children}
             </WishlistProvider>
           </CartProvider>
         </ThemeProvider>
